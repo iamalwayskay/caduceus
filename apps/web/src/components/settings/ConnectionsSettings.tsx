@@ -82,8 +82,6 @@ import {
   supportsDesktopAppUpdate,
   supportsServerUpdateThreadContinuation,
 } from "~/versionSkew";
-import { hasCloudPublicConfig } from "~/cloud/publicConfig";
-import { RemoveT3ConnectEnvironmentDialog } from "../clerk/RemoveT3ConnectEnvironmentDialog";
 import { authEnvironment } from "~/state/auth";
 import { environmentCatalog } from "~/connection/catalog";
 import { readEnvironmentScope, useEnvironmentScope } from "~/state/session";
@@ -127,11 +125,7 @@ import {
   NetworkAccessDescription,
   PairingClientsList,
 } from "./AuthorizedClientsSettings";
-import {
-  CloudLinkRow,
-  CloudRemoteEnvironmentRows,
-  SavedBackendListRow,
-} from "./SavedEnvironmentRows";
+import { SavedBackendListRow } from "./SavedEnvironmentRows";
 import { AddEnvironmentDialog } from "./AddEnvironmentDialog";
 
 const DEFAULT_TAILSCALE_SERVE_PORT = 443;
@@ -594,15 +588,7 @@ export function ConnectionsSettings({ view }: { readonly view: "environments" | 
     }
   };
 
-  // Removing a T3 Connect route preserves account registration; use a separate dialog pointing to
-  // deregistration.
-  const [pendingT3ConnectRemoval, setPendingT3ConnectRemoval] =
-    useState<EnvironmentPresentation | null>(null);
   const handleRemoveSavedBackend = async (environment: EnvironmentPresentation) => {
-    if (environment.relayManaged && hasCloudPublicConfig()) {
-      setPendingT3ConnectRemoval(environment);
-      return;
-    }
     const confirmed = await requestConfirmDialog(
       `Remove ${environment.label} from this device?\nThis forgets its pairing, credentials, and cached threads here. Switch it off instead to keep it saved.`,
       { variant: "destructive" },
@@ -1123,17 +1109,9 @@ export function ConnectionsSettings({ view }: { readonly view: "environments" | 
                 {renderEndpointRows("endpoint-rail")}
                 {renderTailscaleRow()}
                 {renderWslRow()}
-                {canReadRelay || canManageRelay ? (
-                  <CloudLinkRow canReadRelay={canReadRelay} canManageRelay={canManageRelay} />
-                ) : null}
               </>
             ) : canManageLocalBackend ? (
-              <>
-                {renderDisabledNetworkAccessRow()}
-                {canReadRelay || canManageRelay ? (
-                  <CloudLinkRow canReadRelay={canReadRelay} canManageRelay={canManageRelay} />
-                ) : null}
-              </>
+              <>{renderDisabledNetworkAccessRow()}</>
             ) : null}
             {primaryEnvironment ? (
               <details className="group px-3 sm:px-4">
@@ -1467,9 +1445,6 @@ export function ConnectionsSettings({ view }: { readonly view: "environments" | 
             title="No environment selected"
             description="Connect an environment to view its settings and access."
           />
-          {canReadRelay || canManageRelay ? (
-            <CloudLinkRow canReadRelay={canReadRelay} canManageRelay={canManageRelay} />
-          ) : null}
         </SettingsSection>
       )}
     </>
@@ -1517,22 +1492,7 @@ export function ConnectionsSettings({ view }: { readonly view: "environments" | 
             }}
           />
         ))}
-        <CloudRemoteEnvironmentRows
-          primaryEnvironmentId={primaryEnvironmentId}
-          savedEnvironments={savedEnvironments}
-        />
       </SettingsSection>
-      {hasCloudPublicConfig() ? (
-        <RemoveT3ConnectEnvironmentDialog
-          environmentLabel={pendingT3ConnectRemoval?.label ?? null}
-          onCancel={() => setPendingT3ConnectRemoval(null)}
-          onConfirm={() => {
-            if (!pendingT3ConnectRemoval) return;
-            setPendingT3ConnectRemoval(null);
-            void removeSavedBackend(pendingT3ConnectRemoval);
-          }}
-        />
-      ) : null}
       <LoadBalancingSettings environments={loadBalancingEnvironments} />
       <PullRequestRoutingSettings environments={loadBalancingEnvironments} />
     </SettingsPageContainer>

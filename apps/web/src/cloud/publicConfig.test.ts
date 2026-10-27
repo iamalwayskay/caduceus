@@ -1,86 +1,34 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { hasCloudPublicConfig, resolveCloudPublicConfig } from "./publicConfig.ts";
+import {
+  hasCloudPublicConfig,
+  resolveCloudPublicConfig,
+  resolveRelayClerkTokenOptions,
+} from "./publicConfig.ts";
 
 afterEach(() => {
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
 });
 
-describe("hasCloudPublicConfig", () => {
-  it("does not expose relay tracing configuration", () => {
-    vi.stubEnv("VITE_RELAY_OTLP_TRACES_URL", "https://telemetry.example.test/v1/traces");
-    vi.stubEnv("VITE_RELAY_OTLP_TRACES_DATASET", "relay-test");
-    vi.stubEnv("VITE_RELAY_OTLP_TRACES_TOKEN", "test-token");
-
-    expect(resolveCloudPublicConfig()).not.toHaveProperty("relayTracing");
-  });
-
-  it("rejects an insecure relay URL", () => {
-    vi.stubEnv("VITE_CLERK_PUBLISHABLE_KEY", "pk_test_example");
+describe("hosted Connect configuration", () => {
+  it.each([
+    ["browser", { location: new URL("https://app.example.test") }],
+    ["electron", { location: new URL("file:///app/index.html"), desktopBridge: {} }],
+  ])("stays disabled in %s even when every legacy environment value is present", (_, window) => {
+    vi.stubEnv("VITE_CLERK_PUBLISHABLE_KEY", `pk_live_${btoa("clerk.example.test$")}`);
     vi.stubEnv("VITE_CLERK_JWT_TEMPLATE", "t3-relay");
-    vi.stubEnv("VITE_T3CODE_RELAY_URL", "http://relay.example.test");
+    vi.stubEnv("VITE_T3CODE_RELAY_URL", "https://relay.example.test");
+    vi.stubGlobal("window", window);
 
+    expect(resolveCloudPublicConfig()).toEqual({
+      clerkPublishableKey: null,
+      clerkJwtTemplate: null,
+      relayUrl: null,
+    });
     expect(hasCloudPublicConfig()).toBe(false);
-  });
-
-  describe("browser origins", () => {
-    beforeEach(() => {
-      vi.stubEnv("VITE_CLERK_PUBLISHABLE_KEY", `pk_live_${btoa("clerk.example.com$")}`);
-      vi.stubEnv("VITE_CLERK_JWT_TEMPLATE", "t3-relay");
-      vi.stubEnv("VITE_T3CODE_RELAY_URL", "https://relay.example.test");
-    });
-
-    it.each(["https://example.com", "https://nightly.app.example.com:443"])(
-      "enables production auth on the configured root and subdomains: %s",
-      (origin) => {
-        vi.stubGlobal("window", { location: new URL(origin) });
-
-        expect(hasCloudPublicConfig()).toBe(true);
-      },
+    expect(() => resolveRelayClerkTokenOptions()).toThrowError(
+      "T3CODE_CLERK_JWT_TEMPLATE is not configured.",
     );
-
-    it.each(["http://localhost:3773", "https://machine.example.ts.net"])(
-      "disables production auth on private browser origins: %s",
-      (origin) => {
-        vi.stubGlobal("window", { location: new URL(origin) });
-
-        expect(hasCloudPublicConfig()).toBe(false);
-      },
-    );
-
-    it.each(["http://app.example.com:443", "https://app.example.com:3773"])(
-      "rejects unsupported schemes and ports even on the configured domain: %s",
-      (origin) => {
-        vi.stubGlobal("window", { location: new URL(origin) });
-
-        expect(hasCloudPublicConfig()).toBe(false);
-      },
-    );
-
-    it.each(["https://notexample.com", "https://example.com.evil.test"])(
-      "rejects domain lookalikes: %s",
-      (origin) => {
-        vi.stubGlobal("window", { location: new URL(origin) });
-
-        expect(hasCloudPublicConfig()).toBe(false);
-      },
-    );
-
-    it.each([
-      ["https://tenant.clerk.accounts.dev", true],
-      ["https://other.clerk.accounts.dev", false],
-    ])("keeps a provider hostname scoped to its own instance: %s", (origin, expected) => {
-      vi.stubEnv("VITE_CLERK_PUBLISHABLE_KEY", `pk_live_${btoa("tenant.clerk.accounts.dev$")}`);
-      vi.stubGlobal("window", { location: new URL(origin) });
-
-      expect(hasCloudPublicConfig()).toBe(expected);
-    });
-
-    it("keeps production keys available in the Electron auth shell", () => {
-      vi.stubGlobal("window", { location: new URL("file:///app/index.html"), desktopBridge: {} });
-
-      expect(hasCloudPublicConfig()).toBe(true);
-    });
   });
 });
