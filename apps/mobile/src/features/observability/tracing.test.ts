@@ -5,7 +5,6 @@ import * as Layer from "effect/Layer";
 import { vi } from "vite-plus/test";
 
 import { layerRemoteHttpClient } from "@t3tools/client-runtime/rpc";
-import { withRelayClientTracing } from "@t3tools/shared/relayTracing";
 
 import * as Tracing from "./tracing";
 
@@ -31,7 +30,6 @@ it.effect("does not export spans when legacy telemetry configuration is present"
   const layerTracedApplication = Layer.effectDiscard(
     Effect.fail(failure).pipe(
       Effect.withSpan("mobile.test.failed-span"),
-      withRelayClientTracing,
       Effect.exit,
       Effect.flatMap((exit) => {
         const reason = exit._tag === "Failure" ? exit.cause.reasons[0] : undefined;

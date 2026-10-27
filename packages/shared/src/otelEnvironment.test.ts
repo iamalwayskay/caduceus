@@ -10,7 +10,6 @@ const load = (env: Record<string, string>) =>
   OtelEnvironment.load.pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env }))));
 
 const hostileEnvironment: Record<string, string> = {
-  T3CODE_TELEMETRY_ENABLED: "true",
   T3CODE_OTEL_SDK_DISABLED: "false",
   OTEL_SDK_DISABLED: "false",
   T3CODE_OTLP_PROTOCOL: "http/json",
@@ -162,18 +161,5 @@ describe("OtelEnvironment", () => {
         );
       }),
     );
-  });
-});
-
-describe("isRelayTracingEnabled", () => {
-  it.each([
-    { name: "no configuration", env: {} },
-    { name: "every export input enabled", env: hostileEnvironment },
-    {
-      name: "an application override of the kill switch",
-      env: { ...hostileEnvironment, OTEL_SDK_DISABLED: "true" },
-    },
-  ])("remains disabled with $name", ({ env }) => {
-    assert.isFalse(OtelEnvironment.isRelayTracingEnabled(env));
   });
 });

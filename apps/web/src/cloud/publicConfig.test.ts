@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { hasCloudPublicConfig } from "./publicConfig.ts";
+import { hasCloudPublicConfig, resolveCloudPublicConfig } from "./publicConfig.ts";
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -8,6 +8,14 @@ afterEach(() => {
 });
 
 describe("hasCloudPublicConfig", () => {
+  it("does not expose relay tracing configuration", () => {
+    vi.stubEnv("VITE_RELAY_OTLP_TRACES_URL", "https://telemetry.example.test/v1/traces");
+    vi.stubEnv("VITE_RELAY_OTLP_TRACES_DATASET", "relay-test");
+    vi.stubEnv("VITE_RELAY_OTLP_TRACES_TOKEN", "test-token");
+
+    expect(resolveCloudPublicConfig()).not.toHaveProperty("relayTracing");
+  });
+
   it("rejects an insecure relay URL", () => {
     vi.stubEnv("VITE_CLERK_PUBLISHABLE_KEY", "pk_test_example");
     vi.stubEnv("VITE_CLERK_JWT_TEMPLATE", "t3-relay");

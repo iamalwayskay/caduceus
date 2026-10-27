@@ -64,8 +64,6 @@ export const load: Effect.Effect<OtelEnvironment> = resourceAttributes.pipe(
   Effect.orDie,
 );
 
-export const isRelayTracingEnabled = (_env: Readonly<Record<string, string | undefined>>) => false;
-
 export type SignalName = "traces" | "metrics" | "logs";
 
 export interface SignalEndpoint {
