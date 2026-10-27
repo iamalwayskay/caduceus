@@ -484,24 +484,6 @@ const sharedSource = Effect.fn("nativeClient.sharedSource")(
 const authorized = (remote: RemoteCache, request: HttpClientRequest.HttpClientRequest) =>
   request.pipe(HttpClientRequest.basicAuth(remote.name, remote.token));
 
-// Build duration lives beside the artifact so hits can report the time they saved.
-const sidecar = (directory: string) => `${directory}.json`;
-const decodeSidecar = Schema.decodeUnknownEffect(
-  Schema.fromJsonString(Schema.Struct({ buildMs: Schema.Number })),
-);
-const readBuildMs = (directory: string) =>
-  FileSystem.FileSystem.pipe(
-    Effect.flatMap((fs) => fs.readFileString(sidecar(directory))),
-    Effect.flatMap(decodeSidecar),
-    Effect.map(({ buildMs }) => buildMs),
-    Effect.orElseSucceed(() => 0),
-  );
-const writeBuildMs = (directory: string, buildMs: number) =>
-  FileSystem.FileSystem.pipe(
-    Effect.flatMap((fs) => fs.writeFileString(sidecar(directory), JSON.stringify({ buildMs }))),
-    Effect.ignore,
-  );
-
 /** Download into a sibling staging directory and publish only after the digest matches. */
 const download = Effect.fn("nativeClient.download")(function* (
   remote: RemoteCache,
@@ -539,8 +521,6 @@ const download = Effect.fn("nativeClient.download")(function* (
     if ((yield* hashBundle(staging)) !== expected)
       return yield* new NativeClientError({ message: "Cached native client failed verification." });
     yield* publish(staging, target);
-    const buildMs = Number(response.headers["x-t3-build-ms"] ?? 0);
-    yield* writeBuildMs(target, Number.isSafeInteger(buildMs) ? buildMs : 0);
     return true;
   }).pipe(
     Effect.ensuring(fs.remove(staging, { recursive: true, force: true }).pipe(Effect.ignore)),
@@ -561,7 +541,6 @@ const upload = Effect.fn("nativeClient.upload")(function* (
     .execute(
       authorized(remote, HttpClientRequest.post(`${remote.url}/${key}/uploads`)).pipe(
         HttpClientRequest.setHeader("x-t3-digest", yield* hashBundle(artifact)),
-        HttpClientRequest.setHeader("x-t3-build-ms", String(yield* readBuildMs(artifact))),
       ),
     )
     .pipe(
@@ -779,10 +758,7 @@ const prune = Effect.fn("nativeClient.prune")(
       .slice(2);
     yield* Effect.forEach(
       stale,
-      ({ name }) =>
-        fs
-          .remove(path.join(parent, name), { recursive: true, force: true })
-          .pipe(Effect.andThen(fs.remove(sidecar(path.join(parent, name)), { force: true }))),
+      ({ name }) => fs.remove(path.join(parent, name), { recursive: true, force: true }),
       { discard: true },
     );
   },
@@ -806,7 +782,7 @@ export const resolveArtifact = Effect.fn("nativeClient.resolveArtifact")(functio
     // Pruning keeps the most recently used, so a client another checkout is installing stays.
     const now = yield* Clock.currentTimeMillis;
     yield* fs.utimes(directory, now / 1000, now / 1000).pipe(Effect.ignore);
-    return { ...artifact, source: "local" as const, buildMs: yield* readBuildMs(directory) };
+    return { ...artifact, source: "local" as const };
   }
   yield* fs.makeDirectory(path.dirname(directory), { recursive: true });
   const remote = yield* remoteCache(home);
@@ -820,23 +796,21 @@ export const resolveArtifact = Effect.fn("nativeClient.resolveArtifact")(functio
     );
     if (downloaded) {
       yield* prune(path.dirname(directory), fingerprint);
-      return { ...artifact, source: "remote" as const, buildMs: yield* readBuildMs(directory) };
+      return { ...artifact, source: "remote" as const };
     }
   }
   const log = yield* BuildLog;
   yield* Console.error(
     `No cached client for ${key}. Building it once for every machine (5-15 min)${log ? `. Log: ${log}` : ""}`,
   );
-  const started = yield* Clock.currentTimeMillis;
   yield* build(platform, abi, directory, fingerprint);
-  yield* writeBuildMs(directory, (yield* Clock.currentTimeMillis) - started);
   yield* prune(path.dirname(directory), fingerprint);
   if (remote && (yield* HostProcess.Environment).T3_NATIVE_CLIENT_CACHE !== "read") {
     yield* upload(remote, platform, key, directory).pipe(
       Effect.catch((error) => Console.error(`Native client was not shared (${describe(error)}).`)),
     );
   }
-  return { ...artifact, source: "build" as const, buildMs: 0 };
+  return { ...artifact, source: "build" as const };
 });
 
 const describe = (error: unknown) =>
@@ -925,7 +899,7 @@ const installIntoSession = Effect.fn("nativeClient.installIntoSession")(function
     : Effect.succeed(false);
   const fetched = yield* downloadOnDevice;
   const artifact = fetched
-    ? { source: "remote" as const, buildMs: 0 }
+    ? { source: "remote" as const }
     : yield* Effect.gen(function* () {
         const local = yield* resolveArtifact(home, platform, deviceAbi, current);
         // A build just shared the client, so the device can fetch it now too.

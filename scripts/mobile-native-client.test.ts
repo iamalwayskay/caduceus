@@ -43,6 +43,8 @@ it.layer(NodeServices.layer)("prebuildAndroid", (it) => {
 
       assert.strictEqual(source.includes("/telemetry"), false);
       assert.strictEqual(source.includes("reportTelemetry"), false);
+      assert.strictEqual(source.includes("x-t3-build-ms"), false);
+      assert.strictEqual(source.includes("decodeSidecar"), false);
     }),
   );
 
