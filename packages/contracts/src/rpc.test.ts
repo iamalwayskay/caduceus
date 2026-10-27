@@ -6,6 +6,11 @@ import { ORCHESTRATION_V2_WS_METHODS } from "./orchestrationV2.ts";
 import { WS_METHODS, WsRpcGroup } from "./rpc.ts";
 
 describe("WebSocket RPC contracts", () => {
+  it("does not expose a remote telemetry endpoint check", () => {
+    expect("serverCheckOtlpEndpoint" in WS_METHODS).toBe(false);
+    expect(WsRpcGroup.requests.has("server.checkOtlpEndpoint")).toBe(false);
+  });
+
   it("rejects server-internal commands sent to dispatchCommand", () => {
     const dispatchCommand = WsRpcGroup.requests.get(ORCHESTRATION_V2_WS_METHODS.dispatchCommand);
     if (dispatchCommand === undefined) throw new Error("dispatchCommand is not registered");

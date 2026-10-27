@@ -661,14 +661,6 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["telemetry analytics usage data tracking legal opt out"],
   },
   {
-    id: "telemetry-export",
-    title: "OpenTelemetry export",
-    to: "/settings/diagnostics",
-    targetId: "telemetry-export",
-    scope: "environment",
-    searchTerms: ["OTel OTLP telemetry export endpoints logs traces metrics Grafana"],
-  },
-  {
     id: "diagnostics",
     title: "Diagnostics",
     to: "/settings/maintenance",

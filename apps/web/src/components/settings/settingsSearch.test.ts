@@ -52,6 +52,11 @@ const ITEMS: ReadonlyArray<SettingsSearchItem> = [
 ];
 
 describe("searchSettings", () => {
+  it("does not advertise remote telemetry export", () => {
+    expect(SETTINGS_SEARCH_ITEMS.map((item) => String(item.id))).not.toContain("telemetry-export");
+    expect(searchSettings("OpenTelemetry export")).toEqual([]);
+  });
+
   it("matches titles, sections, and remembered setting details", () => {
     expect(searchSettings("word", ITEMS).map((item) => item.id)).toEqual(["word-wrap"]);
     expect(searchSettings("network", ITEMS).map((item) => item.id)).toEqual(["network-access"]);
@@ -151,16 +156,6 @@ describe("searchSettings", () => {
 });
 
 describe("settings search targets", () => {
-  it("requires an environment for the resolved telemetry export destination", () => {
-    const result = searchSettings("OpenTelemetry export").find(
-      (item) => item.id === "telemetry-export",
-    )!;
-    const target = getSettingsSearchTargetScope(result.targetId ?? result.id)!;
-    expect(isSettingsSearchScopeAvailable(target.scope, "all")).toBe(false);
-    expect(isSettingsSearchScopeAvailable(target.scope, "project")).toBe(false);
-    expect(isSettingsSearchScopeAvailable(target.scope, "environment")).toBe(true);
-  });
-
   it("keeps environment-wide settings out of project scopes", () => {
     const updates = getSettingsSearchTargetScope("provider-update-checks")!;
     expect(updates.scope).toBe("environment-defaults");
