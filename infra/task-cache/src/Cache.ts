@@ -4,13 +4,9 @@ import * as Clock from "effect/Clock";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import type * as Cloudflare from "@cloudflare/workers-types";
-import { Summary, recordSummary } from "./Summary.ts";
-import * as Savings from "./Savings.ts";
 import type { ProtocolBindings } from "./protocolTypes.ts";
 import * as Admission from "./Admission.ts";
 import { developerIdentity } from "./developerAuth.ts";
-
-const decodeSummary = Schema.decodeEffect(Schema.fromJsonString(Summary));
 
 export class CacheError extends Schema.TaggedError<CacheError>()("CacheError", {
   status: Schema.Number,
@@ -41,11 +37,9 @@ export class Cache extends Context.Service<
 const make = Effect.gen(function* () {
   const bindings = yield* Bindings;
   const admission = yield* Admission.Admission;
-  const savings = yield* Savings.Savings;
   // The source-only protocol dependency is bundled for Workers, never evaluated by Node during deployment.
   const {
     authorizeCacheWrite,
-    authorizeTelemetry,
     keys,
     cborResponse,
     cleanup,
@@ -56,7 +50,6 @@ const make = Effect.gen(function* () {
     fetchMetadata,
     defaults,
     store,
-    readBody,
     Deadline,
     Observations,
   } = yield* Effect.promise(() => import("./protocol.ts"));
@@ -84,9 +77,7 @@ const make = Effect.gen(function* () {
   const handle = Effect.fn("TaskCache.handle")(
     function* (request: Request, context: Pick<Cloudflare.ExecutionContext, "waitUntil">) {
       const url = new URL(request.url);
-      const route = /^\/projects\/t3code\/(fetch|store|telemetry|blob\/([0-9a-f-]{36}))$/.exec(
-        url.pathname,
-      );
+      const route = /^\/projects\/t3code\/(fetch|store|blob\/([0-9a-f-]{36}))$/.exec(url.pathname);
       const operation = route?.[1] ?? "unknown";
       const writing = operation === "store";
       yield* Effect.annotateCurrentSpan({
@@ -102,7 +93,7 @@ const make = Effect.gen(function* () {
       if (!request.headers.has("authorization"))
         return yield* new CacheError({ status: 401, reason: "missing_identity" });
       const developer = yield* developerIdentity(request, bindings.developerKeys);
-      if (writing || operation === "telemetry") {
+      if (writing) {
         if (developer === null)
           return yield* new CacheError({ status: 403, reason: "invalid_identity" });
       } else {
@@ -141,39 +132,8 @@ const make = Effect.gen(function* () {
                   ),
                 ),
               );
-              if (!writing && operation !== "telemetry") yield* checkLimit(operation);
+              if (!writing) yield* checkLimit(operation);
               const scope = yield* protocol(() => getScope(bindings.INDEX, "t3code", stats));
-              if (operation === "telemetry") {
-                let identity = developer ?? undefined;
-                if (identity === undefined) {
-                  identity = yield* protocol(() => authorizeTelemetry(request, scope, keys));
-                }
-                yield* checkLimit(operation);
-                const bytes = yield* protocol(() => readBody(request.body, 256 * 1024, deadline));
-                const summary = yield* decodeSummary(new TextDecoder().decode(bytes)).pipe(
-                  Effect.mapError(() => new CacheError({ status: 400, reason: "invalid_summary" })),
-                );
-                if (summary.tasks.length === 0) return new Response(null, { status: 204 });
-                const now = yield* Clock.currentTimeMillis;
-                if (summary.recordedAt > now + 60_000 || summary.recordedAt < now - 30 * 86400_000)
-                  return yield* new CacheError({ status: 400, reason: "summary_expired" });
-                yield* savings
-                  .record(summary, identity)
-                  .pipe(
-                    Effect.mapError(
-                      () => new CacheError({ status: 503, reason: "telemetry_unavailable" }),
-                    ),
-                  );
-                yield* recordSummary(summary, identity);
-                yield* savings
-                  .emitTotals(identity, summary.host)
-                  .pipe(
-                    Effect.mapError(
-                      () => new CacheError({ status: 503, reason: "telemetry_unavailable" }),
-                    ),
-                  );
-                return new Response(null, { status: 204 });
-              }
               if (writing) {
                 if (developer !== undefined && !scope.writes_enabled) {
                   return yield* new CacheError({ status: 403, reason: "developer_write_denied" });

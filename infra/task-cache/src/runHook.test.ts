@@ -1,4 +1,4 @@
-// @effect-diagnostics nodeBuiltinImport:off - exercises the real native runner and local HTTP collector.
+// @effect-diagnostics nodeBuiltinImport:off - exercises the real native runner and local HTTP endpoint.
 import * as NodeChildProcess from "node:child_process";
 import * as NodeFSP from "node:fs/promises";
 import * as NodeHttp from "node:http";
@@ -9,36 +9,10 @@ import { expect, it } from "vite-plus/test";
 it("uses one machine hook across fresh worktrees without modifying Vite+", async () => {
   const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "task-cache-hook-"));
   const unrelated = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "unrelated-project-"));
-  const reports: { authorization: string | undefined; body: string }[] = [];
-  let firstExit!: () => void;
-  const firstExited = new Promise<void>((resolve) => {
-    firstExit = resolve;
-  });
-  let completedReports = 0;
-  let notified: (() => void) | undefined;
-  let firstDisconnected = false;
-  const report = (count: number) =>
-    completedReports >= count
-      ? Promise.resolve()
-      : new Promise<void>((resolve) => {
-          notified = resolve;
-        });
-  const server = NodeHttp.createServer(async (request, response) => {
-    if (!request.url?.endsWith("/telemetry")) {
-      response.writeHead(404).end();
-      return;
-    }
-    let body = "";
-    for await (const chunk of request) body += chunk;
-    reports.push({ authorization: request.headers.authorization, body });
-    if (reports.length === 1) {
-      await firstExited;
-      firstDisconnected = response.destroyed;
-    }
-    response.writeHead(204).end();
-    completedReports++;
-    notified?.();
-    notified = undefined;
+  const requests: string[] = [];
+  const server = NodeHttp.createServer((request, response) => {
+    requests.push(request.url ?? "");
+    response.writeHead(404).end();
   });
   try {
     await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -121,8 +95,6 @@ it("uses one machine hook across fresh worktrees without modifying Vite+", async
               ...process.env,
               HOME: root,
               GITHUB_ACTIONS: ci ? "true" : undefined,
-              T3_TASK_CACHE_TELEMETRY: undefined,
-              T3_TASK_CACHE_HOST: undefined,
               VITE_CACHE_PATH: undefined,
               ACTIONS_ID_TOKEN_REQUEST_URL: undefined,
               ACTIONS_ID_TOKEN_REQUEST_TOKEN: undefined,
@@ -139,45 +111,28 @@ it("uses one machine hook across fresh worktrees without modifying Vite+", async
         });
         child.once("error", reject);
         child.once("close", (code) => {
-          firstExit();
           if (code !== 0 && task !== "fail") reject(new Error(stderr));
           else resolve(code);
         });
       });
     expect(await run("build")).toBe(0);
-    await report(1);
     expect(await run("--last-details")).toBe(0);
     expect(
       JSON.parse(await NodeFSP.readFile(NodePath.join(root, "environment.json"), "utf8")),
     ).toMatchObject({ url: null });
-    expect(firstDisconnected).toBe(false);
     expect(await run("build")).toBe(0);
-    await report(2);
     expect(await run("fail")).toBe(7);
-    await report(3);
     const secondWorktree = NodePath.join(root, "second-worktree");
     await NodeFSP.mkdir(secondWorktree);
     for (const file of ["package.json", ".task-cache.json", "vite.config.ts", "build.cjs"])
       await NodeFSP.copyFile(NodePath.join(root, file), NodePath.join(secondWorktree, file));
     expect(await run("build", secondWorktree)).toBe(0);
-    await report(4);
     expect(await run("build", secondWorktree, true)).toBe(0);
-    await report(5);
     expect(await NodeFSP.readFile(entrypoint, "utf8")).toBe(originalEntrypoint);
     expect(await run("nested", root, false, "--no-cache")).toBe(0);
     expect(await run("build", nested)).toBe(0);
-    expect(reports).toHaveLength(5);
-    expect(
-      reports.every(
-        (report) =>
-          report.authorization === `Basic ${Buffer.from("maria:secret").toString("base64")}`,
-      ),
-    ).toBe(true);
-    const events = reports.map((report) => JSON.parse(report.body));
-    expect(events[0].tasks[0].source).toBe("executed");
-    expect(events[1].tasks[0].source).toBe("local");
-    expect(events[3].tasks[0].source).toBe("executed");
-    expect(new Set(events.map((event) => event.id)).size).toBe(5);
+    expect(requests.length).toBeGreaterThan(0);
+    expect(requests.some((request) => request.endsWith("/telemetry"))).toBe(false);
   } finally {
     await new Promise<void>((resolve, reject) =>
       server.close((error) => (error ? reject(error) : resolve())),
@@ -187,10 +142,14 @@ it("uses one machine hook across fresh worktrees without modifying Vite+", async
   }
 });
 
-it("rejects invalid setup credentials before installing anything and never prints the token", async () => {
+it("installs credentials without a network probe and never prints the token", async () => {
   const home = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "task-cache-setup-"));
   const token = "private-credential-that-must-not-appear-in-output";
-  const server = NodeHttp.createServer((_request, response) => response.writeHead(401).end());
+  let requests = 0;
+  const server = NodeHttp.createServer((_request, response) => {
+    requests++;
+    response.writeHead(401).end();
+  });
   try {
     await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
     const address = server.address();
@@ -220,10 +179,19 @@ it("rejects invalid setup credentials before installing anything and never print
       child.once("error", reject);
       child.once("close", (code) => resolve({ code, output }));
     });
-    expect(result.code).not.toBe(0);
-    expect(result.output).toContain("Credential verification failed (401)");
+    expect(result.code).toBe(0);
+    expect(requests).toBe(0);
     expect(result.output).not.toContain(token);
-    expect(await NodeFSP.readdir(home)).toEqual([]);
+    expect(
+      JSON.parse(
+        await NodeFSP.readFile(
+          NodePath.join(home, ".config/t3-task-cache/credentials.json"),
+          "utf8",
+        ),
+      ),
+    ).toEqual({
+      [`http://127.0.0.1:${address.port}/projects/test`]: { name: "maria", token },
+    });
   } finally {
     await new Promise<void>((resolve, reject) =>
       server.close((error) => (error ? reject(error) : resolve())),
@@ -232,13 +200,26 @@ it("rejects invalid setup credentials before installing anything and never print
   }
 });
 
-it("does not start telemetry or create local state without cache credentials", async () => {
-  const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "task-cache-unconfigured-"));
+it("uses the cache hook without creating or sending telemetry", async () => {
+  const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "task-cache-no-telemetry-"));
+  let requests = 0;
+  const server = NodeHttp.createServer((_request, response) => {
+    requests++;
+    response.writeHead(204).end();
+  });
   try {
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("Missing HTTP address");
+    const endpoint = `http://127.0.0.1:${address.port}/projects/test`;
+    await NodeFSP.writeFile(NodePath.join(root, ".task-cache.json"), JSON.stringify({ endpoint }));
+    await NodeFSP.mkdir(NodePath.join(root, ".config/t3-task-cache"), { recursive: true });
     await NodeFSP.writeFile(
-      NodePath.join(root, ".task-cache.json"),
-      JSON.stringify({ endpoint: "https://cache.invalid/projects/test" }),
+      NodePath.join(root, ".config/t3-task-cache/credentials.json"),
+      JSON.stringify({ [endpoint]: { name: "maria", token: "secret" } }),
     );
+    const cache = NodePath.join(root, "cache");
+    await NodeFSP.mkdir(NodePath.join(cache, "fixture"), { recursive: true });
     const hook = new URL("./runHook.ts", import.meta.url).href;
     const output = await new Promise<string>((resolve, reject) => {
       const child = NodeChildProcess.spawn(
@@ -246,11 +227,19 @@ it("does not start telemetry or create local state without cache credentials", a
         [
           "--input-type=module",
           "-e",
-          `import start from ${JSON.stringify(hook)}; const finish = start({ root: process.cwd() }); if (finish !== undefined) process.exit(1);`,
+          `import fs from "node:fs"; import path from "node:path"; import start from ${JSON.stringify(hook)}; const finish = start({ root: process.cwd() }); if (typeof finish !== "function" || finish.remoteCache !== "read-write") throw new Error(JSON.stringify({type:typeof finish,mode:finish?.remoteCache,home:process.env.HOME})); fs.writeFileSync(path.join(process.env.VITE_CACHE_PATH, "fixture/last-summary.json"), JSON.stringify({tasks:[{package_name:"fixture",task_name:"build",result:{Spawned:{cache_status:"Miss"}}}]})); await finish();`,
         ],
         {
           cwd: root,
-          env: { ...process.env, HOME: root, VP_REMOTE_CACHE_URL: "" },
+          env: {
+            ...process.env,
+            HOME: root,
+            GITHUB_ACTIONS: "true",
+            VITE_CACHE_PATH: cache,
+            VP_T3_TASK_CACHE_MODE: "",
+            VP_REMOTE_CACHE: "read-write",
+            VP_REMOTE_CACHE_URL: "",
+          },
           stdio: ["ignore", "pipe", "pipe"],
         },
       );
@@ -267,8 +256,14 @@ it("does not start telemetry or create local state without cache credentials", a
       );
     });
     expect(output).toBe("");
-    expect(await NodeFSP.readdir(root)).toEqual([".task-cache.json"]);
+    expect(requests).toBe(0);
+    await expect(
+      NodeFSP.stat(NodePath.join(root, ".cache/t3-task-cache/telemetry")),
+    ).rejects.toThrow();
   } finally {
+    await new Promise<void>((resolve, reject) =>
+      server.close((error) => (error ? reject(error) : resolve())),
+    );
     await NodeFSP.rm(root, { recursive: true, force: true });
   }
 });

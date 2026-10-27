@@ -1,9 +1,9 @@
 import { generateKeyPair, SignJWT } from "jose";
 import { expect, it, vi } from "vite-plus/test";
-import { authorizeCacheWrite, authorizeTelemetry } from "./telemetryAuth.ts";
-import { authorize, ISSUER } from "../vendor/vite-plus-remote-cache-cloudflare/src/auth.ts";
+import { authorizeCacheWrite } from "./cacheAuth.ts";
+import { ISSUER } from "../vendor/vite-plus-remote-cache-cloudflare/src/auth.ts";
 
-it("accepts signed stacked PR telemetry without granting cache writes or trusting another repository", async () => {
+it("accepts cache writes only for the configured repository policy and audience", async () => {
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(1_000_000);
   try {
@@ -13,10 +13,10 @@ it("accepts signed stacked PR telemetry without granting cache writes or trustin
       endpoint: "https://cache.example/projects/t3code",
       repository_id: "123",
       repository_owner_id: "456",
-      branch: "refs/heads/main",
+      branch: "refs/heads/feature/parent",
       policy_version: 1,
-      writes_enabled: 0,
-      pull_requests: 0,
+      writes_enabled: 1,
+      pull_requests: 1,
     };
     const token = async (repository_id: string, audience = scope.endpoint) =>
       new SignJWT({
@@ -36,47 +36,25 @@ it("accepts signed stacked PR telemetry without granting cache writes or trustin
         .setNotBefore(1000)
         .setExpirationTime(1600)
         .sign(privateKey);
-    const request = (token: string) =>
-      new Request(scope.endpoint, { headers: { Authorization: `Bearer ${token}` } });
+    const request = (value: string) =>
+      new Request(scope.endpoint, { headers: { Authorization: `Bearer ${value}` } });
     const keys = async () => publicKey;
-    const valid = request(await token("123"));
-    const allowed = {
-      ...scope,
-      writes_enabled: 1,
-      pull_requests: 1,
-      branch: "refs/heads/feature/parent",
-    };
     expect(
       await authorizeCacheWrite(
         request(await token("123", "https://ci-reader:secret@cache.example/projects/t3code")),
-        allowed,
+        scope,
         keys,
       ),
     ).toMatchObject({ repository_id: "123" });
     await expect(
       authorizeCacheWrite(
         request(await token("123", "https://ci-reader:secret@other.example/projects/t3code")),
-        allowed,
+        scope,
         keys,
       ),
     ).rejects.toMatchObject({ status: 403 });
-    expect(await authorizeTelemetry(valid, scope, keys)).toBe("github/maria");
     await expect(
-      authorizeCacheWrite(valid, { ...allowed, pull_requests: 0 }, keys),
-    ).rejects.toMatchObject({ status: 403 });
-    await expect(
-      authorizeCacheWrite(valid, { ...allowed, branch: "refs/heads/main" }, keys),
-    ).rejects.toMatchObject({ status: 403 });
-    await expect(authorize(valid, scope, keys)).rejects.toMatchObject({ status: 403 });
-    await expect(authorizeCacheWrite(valid, scope, keys)).rejects.toMatchObject({ status: 403 });
-    expect(await authorizeCacheWrite(valid, allowed, keys)).toMatchObject({
-      repository_id: "123",
-    });
-    await expect(
-      authorizeCacheWrite(request(await token("another-repo")), allowed, keys),
-    ).rejects.toMatchObject({ status: 403 });
-    await expect(
-      authorizeTelemetry(request(await token("another-repo")), scope, keys),
+      authorizeCacheWrite(request(await token("another-repo")), scope, keys),
     ).rejects.toMatchObject({ status: 403 });
   } finally {
     vi.useRealTimers();

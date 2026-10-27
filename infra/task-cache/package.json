@@ -10,7 +10,6 @@
     "writers": "node scripts/manage.ts"
   },
   "dependencies": {
-    "@alchemy.run/axiom": "catalog:",
     "@alchemy.run/cloudflare": "catalog:",
     "alchemy": "catalog:",
     "effect": "catalog:",

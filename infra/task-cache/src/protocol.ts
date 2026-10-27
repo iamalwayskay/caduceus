@@ -18,4 +18,4 @@ export { Observations } from "../vendor/vite-plus-remote-cache-cloudflare/src/ob
 
 export const keys = githubKeys();
 
-export { authorizeCacheWrite, authorizeTelemetry } from "./telemetryAuth.ts";
+export { authorizeCacheWrite } from "./cacheAuth.ts";

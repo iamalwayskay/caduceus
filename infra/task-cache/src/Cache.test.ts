@@ -9,7 +9,6 @@ import { vi } from "vite-plus/test";
 import { Observations } from "../vendor/vite-plus-remote-cache-cloudflare/src/observations.ts";
 import * as Admission from "./Admission.ts";
 import * as Cache from "./Cache.ts";
-import * as Savings from "./Savings.ts";
 
 vi.mock("../vendor/vite-plus-remote-cache-cloudflare/src/database.ts", () => ({
   getScope: async () => ({}),
@@ -43,17 +42,7 @@ it.effect("includes successful blob downloads in exported R2 usage", () =>
       );
     }).pipe(
       Effect.provide(
-        Cache.layer.pipe(
-          Layer.provide([
-            Layer.succeed(Cache.Bindings, bindings),
-            Admission.layer,
-            Layer.succeed(Savings.Savings, {
-              record: () => Effect.void,
-              emitTotals: () => Effect.void,
-              cleanup: Effect.void,
-            }),
-          ]),
-        ),
+        Cache.layer.pipe(Layer.provide([Layer.succeed(Cache.Bindings, bindings), Admission.layer])),
       ),
     );
     expect(response.status).toBe(200);
@@ -104,17 +93,7 @@ it.effect("returns 503 immediately when authenticated requests fill all read per
       yield* Effect.forEach(pending, Fiber.interrupt);
     }).pipe(
       Effect.provide([
-        Cache.layer.pipe(
-          Layer.provide([
-            Layer.succeed(Cache.Bindings, bindings),
-            Admission.layer,
-            Layer.succeed(Savings.Savings, {
-              record: () => Effect.void,
-              emitTotals: () => Effect.void,
-              cleanup: Effect.void,
-            }),
-          ]),
-        ),
+        Cache.layer.pipe(Layer.provide([Layer.succeed(Cache.Bindings, bindings), Admission.layer])),
         Logger.layer([Logger.make(({ message }) => logs.push(message))], {
           mergeWithExisting: false,
         }),
@@ -171,17 +150,7 @@ it.effect("aborts the upstream deadline before disposing it on interruption", ()
       expect(cancelled).toEqual([true]);
     }).pipe(
       Effect.provide(
-        Cache.layer.pipe(
-          Layer.provide([
-            Layer.succeed(Cache.Bindings, bindings),
-            Admission.layer,
-            Layer.succeed(Savings.Savings, {
-              record: () => Effect.void,
-              emitTotals: () => Effect.void,
-              cleanup: Effect.void,
-            }),
-          ]),
-        ),
+        Cache.layer.pipe(Layer.provide([Layer.succeed(Cache.Bindings, bindings), Admission.layer])),
       ),
     );
   }),
@@ -223,7 +192,7 @@ it.effect("does not charge authenticated budgets for anonymous or malformed requ
       ),
       { waitUntil: () => {} },
     );
-    expect(limit.mock.calls).toEqual([[{ key: "t3code:telemetry" }], [{ key: "t3code:blob" }]]);
+    expect(limit.mock.calls).toEqual([[{ key: "t3code:blob" }]]);
   }).pipe(
     Effect.provide(
       Cache.layer.pipe(
@@ -238,20 +207,13 @@ it.effect("does not charge authenticated budgets for anonymous or malformed requ
             ARTIFACTS: { get: async () => ({ size: 4, body: new Blob(["data"]).stream() }) },
           } as unknown as Cache.Bindings["Service"]),
           Admission.layer,
-          Layer.succeed(Savings.Savings, {
-            record: () => Effect.void,
-            emitTotals: () => Effect.void,
-            cleanup: Effect.void,
-          }),
         ]),
       ),
     ),
   );
 });
 
-it.effect("authenticates setup probes without recording empty savings", () => {
-  const record = vi.fn(() => Effect.void);
-  const emitTotals = vi.fn(() => Effect.void);
+it.effect("does not expose a telemetry collector route", () => {
   return Effect.gen(function* () {
     const cache = yield* Cache.Cache;
     const response = yield* cache.handle(
@@ -273,9 +235,7 @@ it.effect("authenticates setup probes without recording empty savings", () => {
       }),
       { waitUntil: () => {} },
     );
-    expect(response.status).toBe(204);
-    expect(record).not.toHaveBeenCalled();
-    expect(emitTotals).not.toHaveBeenCalled();
+    expect(response.status).toBe(404);
   }).pipe(
     Effect.provide(
       Cache.layer.pipe(
@@ -287,7 +247,6 @@ it.effect("authenticates setup probes without recording empty savings", () => {
             readLimit: { limit: async () => ({ success: true }) },
           } as unknown as Cache.Bindings["Service"]),
           Admission.layer,
-          Layer.succeed(Savings.Savings, { record, emitTotals, cleanup: Effect.void }),
         ]),
       ),
     ),
@@ -336,11 +295,6 @@ it.effect("keeps artifacts private and limits CI reader credentials to reads", (
             storeLimit: { limit: async () => ({ success: true }) },
           } as unknown as Cache.Bindings["Service"]),
           Admission.layer,
-          Layer.succeed(Savings.Savings, {
-            record: () => Effect.void,
-            emitTotals: () => Effect.void,
-            cleanup: Effect.void,
-          }),
         ]),
       ),
     ),
@@ -350,7 +304,7 @@ it.effect("keeps artifacts private and limits CI reader credentials to reads", (
 it.effect("rejects anonymous and invalid Basic requests before admission", () =>
   Effect.gen(function* () {
     const cache = yield* Cache.Cache;
-    for (const operation of ["store", "telemetry", "fetch"]) {
+    for (const operation of ["store", "fetch"]) {
       for (const authorization of [undefined, `Basic ${btoa("attacker:invalid")}`]) {
         const response = yield* cache.handle(
           new Request(`https://cache.example/projects/t3code/${operation}`, {
@@ -372,11 +326,6 @@ it.effect("rejects anonymous and invalid Basic requests before admission", () =>
           } as Cache.Bindings["Service"]),
           Layer.succeed(Admission.Admission, {
             withPermit: () => Effect.die("Unauthenticated request reached admission"),
-          }),
-          Layer.succeed(Savings.Savings, {
-            record: () => Effect.void,
-            emitTotals: () => Effect.void,
-            cleanup: Effect.void,
           }),
         ]),
       ),

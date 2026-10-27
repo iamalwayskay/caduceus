@@ -1,6 +1,5 @@
-/* oxlint-disable t3code/no-global-process-runtime -- Standalone setup must run before workspace dependencies are installed. */
 // @effect-diagnostics nodeBuiltinImport:off - standalone bootstrap also runs before dependencies are installed.
-// @effect-diagnostics globalConsole:off globalFetch:off globalDate:off - interactive setup and endpoint verification.
+// @effect-diagnostics globalConsole:off - interactive setup.
 import * as NodeCrypto from "node:crypto";
 import * as NodeFSP from "node:fs/promises";
 import * as NodeOS from "node:os";
@@ -155,28 +154,6 @@ if (
     "Use an HTTPS cache endpoint without embedded credentials, query, or fragment (HTTP is only allowed on loopback).",
   );
 endpoint = url.href.replace(/\/$/, "");
-const response = await fetch(`${endpoint}/telemetry`, {
-  method: "POST",
-  headers: {
-    Authorization: `Basic ${Buffer.from(`${name}:${token}`).toString("base64")}`,
-    "Content-Type": "application/json",
-  },
-  body: JSON.stringify({
-    id: NodeCrypto.randomBytes(32).toString("hex"),
-    recordedAt: Date.now(),
-    host: NodeOS.hostname(),
-    platform: NodeOS.platform(),
-    arch: NodeOS.arch(),
-    ci: false,
-    runId: "setup",
-    tasks: [],
-  }),
-  signal: AbortSignal.timeout(10_000),
-});
-await response.body?.cancel();
-if (!response.ok)
-  throw new Error(`Credential verification failed (${response.status}); nothing was installed.`);
-
 const candidates = [NodePath.join(root, "node_modules/vite-plus/dist/bin.js")];
 for (const directory of [
   process.env.VITE_PLUS_HOME,
@@ -215,8 +192,6 @@ await NodeFSP.writeFile(NodePath.join(installed, "package.json"), '{"type":"modu
 for (const file of [
   "runHook.ts",
   "remoteCache.ts",
-  "flush.ts",
-  "telemetry.ts",
   "nativeHook.js",
   "nativeRunHook.js",
   "preload.mjs",
@@ -251,6 +226,12 @@ for (const file of [
   "bin",
 ])
   await NodeFSP.rm(NodePath.join(installed, file), { recursive: true, force: true });
+for (const file of ["flush.ts", "telemetry.ts"])
+  await NodeFSP.rm(NodePath.join(installed, file), { force: true });
+await NodeFSP.rm(NodePath.join(home, ".cache/t3-task-cache/telemetry"), {
+  recursive: true,
+  force: true,
+});
 await NodeFSP.mkdir(state, { recursive: true, mode: 0o700 });
 credentials[endpoint] = { name, token };
 const temporaryCredentials = NodePath.join(state, `.credentials-${NodeCrypto.randomUUID()}.tmp`);

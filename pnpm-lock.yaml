@@ -1372,9 +1372,6 @@ importers:
 
   infra/task-cache:
     dependencies:
-      '@alchemy.run/axiom':
-        specifier: 'catalog:'
-        version: 2.0.0-beta.84(74118100341fd69edb1510aa7b7f1bd2)
       '@alchemy.run/cloudflare':
         specifier: 'catalog:'
         version: 2.0.0-beta.84(24ce6902b7189b66a257867375b8f56d)
