@@ -1,43 +1,164 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Caduceus — telemetry-free T3 fork</title>
-  <style>
-    :root { color-scheme: light dark; --bg:#f7f7f4; --fg:#1b1d20; --muted:#62676f; --card:#fff; --line:#bcc2ca; --accent:#3157d5; --safe:#16794b; }
-    @media (prefers-color-scheme: dark) { :root { --bg:#101215; --fg:#eceff3; --muted:#aeb4bd; --card:#181b20; --line:#444b55; --accent:#8ca5ff; --safe:#6bd6a2; } }
-    * { box-sizing:border-box; }
-    body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.55 system-ui,sans-serif; }
-    main { max-width:1080px; margin:auto; padding:48px 28px 80px; }
-    h1 { font-size:2.5rem; margin:0 0 .3rem; } h2 { margin-top:2.4rem; } h3 { margin-bottom:.3rem; }
-    .lede,.muted { color:var(--muted); } .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:22px; margin:16px 0; }
-    code { background:color-mix(in srgb,var(--card) 70%,var(--line)); padding:.1em .35em; border-radius:5px; }
-    pre { overflow:auto; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px; }
-    .gate { border-left:5px solid var(--safe); } li { margin:.45rem 0; }
-    svg { width:100%; height:auto; display:block; } .box { fill:var(--card); stroke:var(--line); stroke-width:2; rx:12; } .t { fill:var(--fg); font:600 16px system-ui,sans-serif; } .s { fill:var(--muted); font:13px system-ui,sans-serif; } .a { stroke:var(--accent); stroke-width:2.5; fill:none; marker-end:url(#arrow); }
-  </style>
-</head>
-<body><main>
-  <h1>Caduceus</h1>
-  <p class="lede">A telemetry-free fork of T3 Code, deployed as one control surface across Kay's laptop and Haven. Hermes and DeepSeek Harness remain separate ACP providers; project files remain shared memory.</p>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Caduceus — telemetry-free T3 fork</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #f7f7f4;
+        --fg: #1b1d20;
+        --muted: #62676f;
+        --card: #fff;
+        --line: #bcc2ca;
+        --accent: #3157d5;
+        --safe: #16794b;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #101215;
+          --fg: #eceff3;
+          --muted: #aeb4bd;
+          --card: #181b20;
+          --line: #444b55;
+          --accent: #8ca5ff;
+          --safe: #6bd6a2;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--fg);
+        font:
+          16px/1.55 system-ui,
+          sans-serif;
+      }
+      main {
+        max-width: 1080px;
+        margin: auto;
+        padding: 48px 28px 80px;
+      }
+      h1 {
+        font-size: 2.5rem;
+        margin: 0 0 0.3rem;
+      }
+      h2 {
+        margin-top: 2.4rem;
+      }
+      h3 {
+        margin-bottom: 0.3rem;
+      }
+      .lede,
+      .muted {
+        color: var(--muted);
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 22px;
+        margin: 16px 0;
+      }
+      code {
+        background: color-mix(in srgb, var(--card) 70%, var(--line));
+        padding: 0.1em 0.35em;
+        border-radius: 5px;
+      }
+      pre {
+        overflow: auto;
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 18px;
+      }
+      .gate {
+        border-left: 5px solid var(--safe);
+      }
+      li {
+        margin: 0.45rem 0;
+      }
+      svg {
+        width: 100%;
+        height: auto;
+        display: block;
+      }
+      .box {
+        fill: var(--card);
+        stroke: var(--line);
+        stroke-width: 2;
+        rx: 12;
+      }
+      .t {
+        fill: var(--fg);
+        font:
+          600 16px system-ui,
+          sans-serif;
+      }
+      .s {
+        fill: var(--muted);
+        font:
+          13px system-ui,
+          sans-serif;
+      }
+      .a {
+        stroke: var(--accent);
+        stroke-width: 2.5;
+        fill: none;
+        marker-end: url(#arrow);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Caduceus</h1>
+      <p class="lede">
+        A telemetry-free fork of T3 Code, deployed as one control surface across Kay's laptop and
+        Haven. Hermes and DeepSeek Harness remain separate ACP providers; project files remain
+        shared memory.
+      </p>
 
-  <h2>Architecture</h2>
-  <div class="card">
-    <svg viewBox="0 0 1000 410" role="img" aria-label="Caduceus control and data flow">
-      <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="currentColor"/></marker></defs>
-      <rect class="box" x="30" y="35" width="230" height="95"/><text class="t" x="55" y="70">Caduceus clients</text><text class="s" x="55" y="95">web / desktop / mobile</text>
-      <rect class="box" x="385" y="25" width="230" height="115"/><text class="t" x="410" y="65">Caduceus server</text><text class="s" x="410" y="90">threads, projects, routing</text><text class="s" x="410" y="112">local diagnostics only</text>
-      <rect class="box" x="735" y="35" width="230" height="95"/><text class="t" x="760" y="70">T3 Connect</text><text class="s" x="760" y="95">functional relay, no analytics</text>
-      <rect class="box" x="160" y="270" width="250" height="105"/><text class="t" x="185" y="305">Laptop providers</text><text class="s" x="185" y="330">Hermes ACP · DSH ACP</text><text class="s" x="185" y="352">local + frontier models</text>
-      <rect class="box" x="590" y="270" width="250" height="105"/><text class="t" x="615" y="305">Haven providers</text><text class="s" x="615" y="330">installed per-host</text><text class="s" x="615" y="352">same project files</text>
-      <path class="a" d="M260 82 H385"/><path class="a" d="M615 82 H735"/><path class="a" d="M455 140 L325 270"/><path class="a" d="M545 140 L675 270"/>
-      <text class="s" x="290" y="70">typed RPC</text><text class="s" x="640" y="70">encrypted remote access</text>
-    </svg>
-  </div>
+      <h2>Architecture</h2>
+      <div class="card">
+        <svg viewBox="0 0 1000 410" role="img" aria-label="Caduceus control and data flow">
+          <defs>
+            <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+              <path d="M0,0 L0,6 L9,3 z" fill="currentColor" />
+            </marker>
+          </defs>
+          <rect class="box" x="30" y="35" width="230" height="95" />
+          <text class="t" x="55" y="70">Caduceus clients</text>
+          <text class="s" x="55" y="95">web / desktop / mobile</text>
+          <rect class="box" x="385" y="25" width="230" height="115" />
+          <text class="t" x="410" y="65">Caduceus server</text>
+          <text class="s" x="410" y="90">threads, projects, routing</text>
+          <text class="s" x="410" y="112">local diagnostics only</text>
+          <rect class="box" x="735" y="35" width="230" height="95" />
+          <text class="t" x="760" y="70">T3 Connect</text>
+          <text class="s" x="760" y="95">functional relay, no analytics</text>
+          <rect class="box" x="160" y="270" width="250" height="105" />
+          <text class="t" x="185" y="305">Laptop providers</text>
+          <text class="s" x="185" y="330">Hermes ACP · DSH ACP</text>
+          <text class="s" x="185" y="352">local + frontier models</text>
+          <rect class="box" x="590" y="270" width="250" height="105" />
+          <text class="t" x="615" y="305">Haven providers</text>
+          <text class="s" x="615" y="330">installed per-host</text>
+          <text class="s" x="615" y="352">Git-backed project memory</text>
+          <path class="a" d="M260 82 H385" />
+          <path class="a" d="M615 82 H735" />
+          <path class="a" d="M455 140 L325 270" />
+          <path class="a" d="M545 140 L675 270" />
+          <text class="s" x="290" y="70">typed RPC</text>
+          <text class="s" x="640" y="70">encrypted remote access</text>
+        </svg>
+      </div>
 
-  <h2>Placement contract</h2>
-  <pre>Code/AI/
+      <h2>Placement contract</h2>
+      <pre>
+Code/AI/
 ├── apps/caduceus/                 fork source; origin is Kay, upstream is pingdotgg
 │   ├── apps/server/               orchestration, analytics removal, ACP launch
 │   ├── apps/web/                  remove analytics controls/copy; retain local diagnostics
@@ -48,24 +169,122 @@
 └── data/caduceus/                 mutable database, logs, attachments and auth
 
 Laptop: ~/.local/bin/caduceus → built launcher; user service points at the fork build.
-Haven:  ~/Code/AI/apps/caduceus + ~/Code/AI/data/caduceus; user service runs the same commit.</pre>
+Haven:  /srv/caduceus/{app,config,data}; hardened system service runs the same commit.</pre>
 
-  <h2>Phases</h2>
-  <section class="card gate"><h3>1. Map and pin every network telemetry path</h3><p>Classify product analytics, OTLP export, desktop/mobile reporting and developer task telemetry. Preserve local trace files, resource diagnostics, provider usage accounting, updates, model catalogs and T3 Connect transport.</p><p><strong>Checked by:</strong> a committed inventory test fails on the untouched upstream source and names every forbidden module/config key.</p></section>
-  <section class="card gate"><h3>2. Make outbound telemetry impossible</h3><p>Delete network publishers and their settings surfaces; make configuration parsers reject or ignore telemetry destinations. Environment variables cannot turn it back on. Remove privacy copy that claims anonymous usage collection.</p><p><strong>Checked by:</strong> focused server, web, desktop, mobile and build-tool tests plus a source scan with an explicit allow-list for local diagnostics.</p></section>
-  <section class="card gate"><h3>3. Build the fork and replace the laptop service</h3><p>Build the self-contained Linux CLI from source. Move live state from <code>data/t3code</code> to <code>data/caduceus</code> without rewriting the database, switch the service atomically, and retain the stock runtime until verification passes.</p><p><strong>Checked by:</strong> version output, service status, existing AI project visible, no outbound telemetry connections during a real session.</p></section>
-  <section class="card gate"><h3>4. Wire providers through ACP using CLI-owned state</h3><p>Add Hermes (<code>hermes acp</code>) and DSH (<code>dsh --profile acp</code>) with absolute executable paths and DSH_HOME. Use the UI only if upstream exposes no CLI/API for provider-instance writes.</p><p><strong>Checked by:</strong> each provider completes a read-only turn in <code>/home/kay/Code/AI</code>; both see the same project files.</p></section>
-  <section class="card gate"><h3>5. Deploy the same commit to Haven and link both machines</h3><p>Install the fork under Haven's AI homestead, create its unprivileged user service, then use <code>caduceus connect link --headless</code> on each host. No credentials are copied between machines.</p><p><strong>Checked by:</strong> Connect status lists KPC and Haven reachable; a thread can be started on each environment.</p></section>
+      <h2>Phases</h2>
+      <section class="card gate">
+        <h3>1. Map and pin every network telemetry path</h3>
+        <p>
+          Classify product analytics, OTLP export, desktop/mobile reporting and developer task
+          telemetry. Preserve local trace files, resource diagnostics, provider usage accounting,
+          updates, model catalogs and T3 Connect transport.
+        </p>
+        <p>
+          <strong>Checked by:</strong> a committed inventory test fails on the untouched upstream
+          source and names every forbidden module/config key.
+        </p>
+      </section>
+      <section class="card gate">
+        <h3>2. Make outbound telemetry impossible</h3>
+        <p>
+          Delete network publishers and their settings surfaces; make configuration parsers reject
+          or ignore telemetry destinations. Environment variables cannot turn it back on. Remove
+          privacy copy that claims anonymous usage collection.
+        </p>
+        <p>
+          <strong>Checked by:</strong> focused server, web, desktop, mobile and build-tool tests
+          plus a source scan with an explicit allow-list for local diagnostics.
+        </p>
+      </section>
+      <section class="card gate">
+        <h3>3. Build the fork and replace the laptop service</h3>
+        <p>
+          Build the self-contained Linux CLI from source. Make a recoverable offline copy of live
+          user data from <code>data/t3code</code> into <code>data/caduceus</code>, excluding stale
+          launcher/service metadata, switch the service atomically, and retain the stock home and
+          unit until verification passes.
+        </p>
+        <p>
+          <strong>Checked by:</strong> exact commit/build identity, service
+          <code>ExecStart</code> and home readback, existing project visible, and process-attributed
+          socket/DNS capture showing only allow-listed functional destinations.
+        </p>
+      </section>
+      <section class="card gate">
+        <h3>4. Wire providers through ACP using CLI-owned state</h3>
+        <p>
+          Add Hermes (<code>hermes acp</code>) and DSH (<code>dsh --profile acp</code>) with
+          absolute executable paths and DSH_HOME. Use the UI only if upstream exposes no CLI/API for
+          provider-instance writes.
+        </p>
+        <p>
+          <strong>Checked by:</strong> each provider completes a read-only turn in
+          <code>/home/kay/Code/AI</code>; both see the same project files.
+        </p>
+      </section>
+      <section class="card gate">
+        <h3>5. Deploy the same commit to Haven and link both machines</h3>
+        <p>
+          Provision the <code>caduceus</code> workload with Haven's native workload tooling under
+          <code>/srv/caduceus</code>, run it as locked <code>svc-caduceus</code>, then use
+          <code>caduceus connect link --headless</code> on each host. No credentials are copied
+          between machines.
+        </p>
+        <p>
+          <strong>Checked by:</strong> Haven's complete acceptance contract (identity, ACL denial,
+          unit verification/security, listeners, failure/restart/reboot, backup/restore and secret
+          scan), Connect status listing KPC and Haven, exact commit identity, and successful
+          read-only ACP turns from every installed provider.
+        </p>
+      </section>
 
-  <h2>Resolved decisions</h2>
-  <ul>
-    <li><strong>Name:</strong> Caduceus. It is a one-word fork name and keeps upstream as <code>upstream</code>.</li>
-    <li><strong>Telemetry:</strong> remove network analytics and crash/trace export. Keep diagnostics that remain on the machine.</li>
-    <li><strong>Remote access:</strong> retain T3 Connect because it is functional transport, not analytics; verify its requests separately.</li>
-    <li><strong>Memory:</strong> ordinary project files curated by Hermes. No memory MCP service.</li>
-    <li><strong>Rollout:</strong> laptop first, Haven second; the stock T3 install remains recoverable until both pass.</li>
-  </ul>
+      <h2>Resolved decisions</h2>
+      <ul>
+        <li>
+          <strong>Name:</strong> Caduceus. It is a one-word fork name and keeps upstream as
+          <code>upstream</code>.
+        </li>
+        <li>
+          <strong>Telemetry:</strong> remove network analytics and crash/trace export. Keep
+          diagnostics that remain on the machine.
+        </li>
+        <li>
+          <strong>Remote access:</strong> retain T3 Connect because it is functional transport, not
+          analytics; verify its requests separately.
+        </li>
+        <li>
+          <strong>Memory:</strong> ordinary project files curated by Hermes. Git is the
+          cross-machine authority: each host uses its own clone, pulls before work, and
+          commits/pushes durable memory with provenance. Non-Git folders are local-only until
+          explicitly placed under version control. No memory MCP service.
+        </li>
+        <li>
+          <strong>Mobile:</strong> remove mobile telemetry from source, but do not claim the stock
+          App Store/Play client is telemetry-free. This pass uses the fork's local web client; a
+          signed Caduceus mobile build is a later deliverable.
+        </li>
+        <li>
+          <strong>Activity publication:</strong> keep Connect transport but disable optional
+          thread-activity publishing unless Kay later asks for mobile notifications or Live
+          Activities.
+        </li>
+        <li>
+          <strong>Rollout:</strong> laptop first, Haven second; the stock T3 install remains
+          recoverable until both pass.
+        </li>
+      </ul>
 
-  <h2>Out of scope</h2>
-  <ul><li>Reimplementing Hermes learning inside Caduceus.</li><li>Copying DSH or Unsloth internals into the fork.</li><li>Removing update checks, provider catalogs, authentication or T3 Connect merely because they use the network.</li><li>Publishing mobile-store binaries in this pass.</li><li>Deleting the previous T3 runtime before the fork passes verification.</li></ul>
-</main></body></html>
+      <h2>Out of scope</h2>
+      <ul>
+        <li>Reimplementing Hermes learning inside Caduceus.</li>
+        <li>Copying DSH or Unsloth internals into the fork.</li>
+        <li>
+          Removing update checks, provider catalogs, authentication or T3 Connect merely because
+          they use the network.
+        </li>
+        <li>Publishing mobile-store binaries in this pass.</li>
+        <li>Deleting the previous T3 runtime before the fork passes verification.</li>
+      </ul>
+    </main>
+  </body>
+</html>
