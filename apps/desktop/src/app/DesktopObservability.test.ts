@@ -313,7 +313,6 @@ describe("DesktopObservability", () => {
           ConfigProvider.layer(
             ConfigProvider.fromEnv({
               env: {
-                T3CODE_TELEMETRY_ENABLED: "true",
                 T3CODE_OTEL_SDK_DISABLED: "false",
                 OTEL_SDK_DISABLED: "false",
                 OTEL_EXPORTER_OTLP_ENDPOINT: "http://127.0.0.1:4318",

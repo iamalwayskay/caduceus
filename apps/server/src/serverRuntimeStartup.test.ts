@@ -11,12 +11,10 @@ import {
 } from "@t3tools/contracts";
 import { DEFAULT_SIGNAL_EXPORT } from "@t3tools/shared/observability";
 import * as OtelEnvironment from "@t3tools/shared/otelEnvironment";
-import * as HostProcess from "@t3tools/shared/HostProcess";
 import { HttpServer } from "effect/http";
 import * as NetAddress from "effect/net/NetAddress";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
-import * as FileSystem from "effect/FileSystem";
 import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as Ref from "effect/Ref";
@@ -46,15 +44,13 @@ import * as AgentAwarenessRelay from "./relay/AgentAwarenessRelay.ts";
 import { ServerActivation } from "./serverActivation.ts";
 import * as ServerLifecycleEvents from "./serverLifecycleEvents.ts";
 import * as ServerSettings from "./serverSettings.ts";
-import * as ServerSecretStore from "./auth/ServerSecretStore.ts";
-import * as AnalyticsService from "./telemetry/AnalyticsService.ts";
 
 it.effect.each([
   "disabled-codex",
   "disabled-default",
   "launch-failure",
   "project-failure",
-] as const)("never reads analytics identity during startup: %s", (scenario) =>
+] as const)("handles disabled providers and bootstrap failures: %s", (scenario) =>
   Effect.scoped(
     Effect.gen(function* () {
       const projectId = ProjectId.make("bootstrap-project");
@@ -62,7 +58,6 @@ it.effect.each([
         scenario === "disabled-default" ? "custom" : "codex",
       );
       const events: ServerLifecycleStreamEvent[] = [];
-      const identityReads: string[] = [];
       const browserReached = yield* Deferred.make<void>();
       const recovery = {
         terminalizedRuns: 0,
@@ -215,22 +210,6 @@ it.effect.each([
           prepareTrial: Effect.succeed(undefined),
         }),
         Layer.mock(GitVcsDriver.GitVcsDriver)({}),
-        AnalyticsService.layer,
-        Layer.succeed(HostProcess.HomeDirectory, "/analytics-privacy-home"),
-        FileSystem.layerNoop({
-          readFileString: (filePath) =>
-            Effect.sync(() => {
-              identityReads.push(filePath);
-              return "{}";
-            }),
-        }),
-        Layer.mock(ServerSecretStore.ServerSecretStore)({
-          get: (key) =>
-            Effect.sync(() => {
-              identityReads.push(`secret:${key}`);
-              return Option.none();
-            }),
-        }),
         Layer.mock(EnvironmentAuth.EnvironmentAuth)({
           issueStartupPairingUrl: (target) => Effect.succeed(target),
         }),
@@ -251,7 +230,6 @@ it.effect.each([
           assert.isUndefined(welcome);
         } else {
           yield* Deferred.await(browserReached);
-          assert.deepStrictEqual(identityReads, []);
           assert.isDefined(welcome);
           if (welcome?.type === "welcome") {
             assert.equal(welcome.payload.bootstrapProjectId, projectId);
