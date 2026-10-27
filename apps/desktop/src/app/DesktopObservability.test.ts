@@ -1,5 +1,4 @@
 import * as NodeHttpClient from "@effect/platform-node/NodeHttpClient";
-import desktopPackageJson from "../../package.json" with { type: "json" };
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import * as ConfigProvider from "effect/ConfigProvider";
@@ -281,14 +280,17 @@ describe("DesktopObservability", () => {
     ),
   );
 
-  it.effect("stops every export when the OpenTelemetry SDK is disabled", () => {
+  it.effect("ignores saved endpoints and hostile export environment", () => {
     const requests: Array<ExportedRequest> = [];
     return Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const baseDir = yield* fileSystem.makeTempDirectoryScoped({
         prefix: "t3-desktop-observability-test-",
       });
-      const layerEnvironment = layerEnvironmentFor(baseDir);
+      const layerEnvironment = layerEnvironmentFor(baseDir, true, {
+        T3CODE_OTLP_TRACES_URL: "http://127.0.0.1:4318/traces",
+        T3CODE_OTLP_LOGS_URL: "http://127.0.0.1:4318/logs",
+      });
       yield* writeObservabilitySettings(layerEnvironment, {
         otlpTracesUrl: "https://settings.example.com/v1/traces",
         otlpLogsUrl: "https://settings.example.com/v1/logs",
@@ -308,13 +310,22 @@ describe("DesktopObservability", () => {
         Layer.mergeAll(
           NodeServices.layer,
           layerCollector(requests),
-          ConfigProvider.layer(ConfigProvider.fromEnv({ env: { OTEL_SDK_DISABLED: "true" } })),
+          ConfigProvider.layer(
+            ConfigProvider.fromEnv({
+              env: {
+                T3CODE_TELEMETRY_ENABLED: "true",
+                T3CODE_OTEL_SDK_DISABLED: "false",
+                OTEL_SDK_DISABLED: "false",
+                OTEL_EXPORTER_OTLP_ENDPOINT: "http://127.0.0.1:4318",
+              },
+            }),
+          ),
         ),
       ),
     );
   });
 
-  it.effect("reports the app's own version for an unpackaged desktop run", () => {
+  it.effect("does not export logs from an unpackaged desktop run with saved endpoints", () => {
     const requests: Array<ExportedRequest> = [];
     return Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
@@ -332,18 +343,14 @@ describe("DesktopObservability", () => {
         ),
       );
 
-      const body = requests.map((request) => request.body).join("\n");
-      assert.include(
-        body,
-        `"key":"service.version","value":{"stringValue":"${desktopPackageJson.version}"}`,
-      );
+      assert.deepStrictEqual(requests, []);
     }).pipe(
       Effect.scoped,
       Effect.provide(Layer.mergeAll(NodeServices.layer, layerCollector(requests), layerEmptyEnv)),
     );
   });
 
-  it.effect("describes the Node runtime and the desktop mode under semantic or t3code keys", () => {
+  it.effect("keeps desktop runtime resource attributes out of network exports", () => {
     const requests: Array<ExportedRequest> = [];
     return Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
@@ -361,14 +368,7 @@ describe("DesktopObservability", () => {
         ),
       );
 
-      const body = requests.map((request) => request.body).join("\n");
-      assert.include(body, '"key":"process.runtime.name","value":{"stringValue":"nodejs"}');
-      assert.include(
-        body,
-        `"key":"process.runtime.version","value":{"stringValue":"${process.versions.node}"}`,
-      );
-      assert.include(body, '"key":"t3code.desktop.mode","value":{"stringValue":"development"}');
-      assert.notInclude(body, "service.mode");
+      assert.deepStrictEqual(requests, []);
     }).pipe(
       Effect.scoped,
       Effect.provide(Layer.mergeAll(NodeServices.layer, layerCollector(requests), layerEmptyEnv)),
