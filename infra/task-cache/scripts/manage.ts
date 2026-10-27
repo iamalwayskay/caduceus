@@ -38,7 +38,11 @@ const updateWriter = Effect.fn("TaskCache.manageWriter")(function* (
           "cloudflare",
           "--no-input",
         ],
-        { cwd: `${import.meta.dirname}/..`, stderr: "inherit" },
+        {
+          cwd: `${import.meta.dirname}/..`,
+          env: { ...process.env, ALCHEMY_TELEMETRY_DISABLED: "1" },
+          stderr: "inherit",
+        },
       ),
     );
     const deployed = yield* decodeDeployment(output);
@@ -51,7 +55,7 @@ const updateWriter = Effect.fn("TaskCache.manageWriter")(function* (
       : `Private credential written to ${file}.`,
   );
   yield* Console.log(
-    "Run alchemy deploy --stage prod from infra/task-cache to apply the writer changes.",
+    "Run vp run --filter @t3tools/task-cache deploy from the repository root to apply the writer changes.",
   );
 });
 

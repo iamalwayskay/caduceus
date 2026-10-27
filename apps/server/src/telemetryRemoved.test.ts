@@ -200,6 +200,7 @@ it("contains no outbound telemetry publishers, configuration, routes, or identit
     "apps/web/src/routes/__root.tsx",
     "infra/relay/src/worker.ts",
     "infra/task-cache/src/Cache.ts",
+    "infra/task-cache/scripts/manage.ts",
     "packages/client-runtime/src/authorization/remote.ts",
     "packages/shared/src/observability.ts",
     "scripts/mobile-native-client.ts",
@@ -231,6 +232,14 @@ it("contains no outbound telemetry publishers, configuration, routes, or identit
       ).toMatch(/^ALCHEMY_TELEMETRY_DISABLED=1 alchemy (?:deploy|destroy)(?: |$)/u);
     }
   }
+
+  expect(
+    NodeFS.readFileSync(
+      NodePath.join(repositoryRoot, "infra/task-cache/scripts/manage.ts"),
+      "utf8",
+    ),
+    "task-cache writer management must disable Alchemy telemetry",
+  ).toContain('ALCHEMY_TELEMETRY_DISABLED: "1"');
 
   const matches = files.flatMap((path) =>
     NodeFS.readFileSync(path, "utf8")
