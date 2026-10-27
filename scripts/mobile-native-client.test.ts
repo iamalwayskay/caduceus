@@ -32,6 +32,20 @@ const fixture = Effect.gen(function* () {
 });
 
 it.layer(NodeServices.layer)("prebuildAndroid", (it) => {
+  it.effect("contains no remote telemetry endpoint or reporting path", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const testFile = yield* path.fromFileUrl(new URL(import.meta.url));
+      const source = yield* fs.readFileString(
+        path.join(path.dirname(testFile), "mobile-native-client.ts"),
+      );
+
+      assert.strictEqual(source.includes("/telemetry"), false);
+      assert.strictEqual(source.includes("reportTelemetry"), false);
+    }),
+  );
+
   it.effect("keeps Gradle and native caches through a clean prebuild", () =>
     Effect.gen(function* () {
       const { fs, path, mobile, android, cleanPrebuild, assertCachesRestored } = yield* fixture;

@@ -11,7 +11,6 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
-import * as Random from "effect/Random";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { Argument, Command, Flag } from "effect/cli";
@@ -428,7 +427,6 @@ const decodeEasBuilds = Schema.decodeUnknownEffect(
 
 interface RemoteCache {
   readonly url: string;
-  readonly telemetry: string;
   readonly name: string;
   readonly token: string;
 }
@@ -451,7 +449,6 @@ const remoteCache = Effect.fn("nativeClient.remoteCache")(
     const base = endpoint.replace(/\/$/, "");
     return {
       url: `${base}/native-clients`,
-      telemetry: `${base}/telemetry`,
       ...login,
     } satisfies RemoteCache;
   },
@@ -876,48 +873,6 @@ const install = Effect.fn("nativeClient.install")(function* (
     yield* command("adb", ["-s", device, "reverse", "tcp:8081", "tcp:8081"]).pipe(Effect.ignore);
 });
 
-const reportTelemetry = Effect.fn("nativeClient.reportTelemetry")(
-  function* (
-    home: string,
-    task: string,
-    source: "local" | "remote" | "executed" | "failed",
-    savedMs: number,
-  ) {
-    const remote = yield* remoteCache(home);
-    if (!remote) return;
-    const environment = yield* HostProcess.Environment;
-    const recordedAt = yield* Clock.currentTimeMillis;
-    // Same machine label as Vite task reports (infra/task-cache/src/telemetry.ts).
-    const fs = yield* FileSystem.FileSystem;
-    const machine = yield* fs.readFileString(`${home}/.agents/MACHINE`).pipe(
-      Effect.map((value) => value.trim()),
-      Effect.orElseSucceed(() => ""),
-    );
-    const host =
-      environment.T3_TASK_CACHE_HOST ||
-      machine ||
-      (environment.GITHUB_ACTIONS === "true"
-        ? `${environment.RUNNER_ENVIRONMENT || "github"}/${environment.RUNNER_OS}/${environment.RUNNER_ARCH}`
-        : yield* HostProcess.Hostname);
-    const client = (yield* HttpClient.HttpClient).pipe(HttpClient.filterStatusOk);
-    yield* client.execute(
-      authorized(remote, HttpClientRequest.post(remote.telemetry)).pipe(
-        HttpClientRequest.bodyJsonUnsafe({
-          id: yield* digest(`${host}:${task}:${recordedAt}:${yield* Random.nextInt}`),
-          recordedAt,
-          host,
-          platform: yield* HostProcess.Platform,
-          arch: yield* HostProcess.Architecture,
-          ci: environment.CI === "true" || environment.CI === "1",
-          runId: environment.GITHUB_RUN_ID ?? "",
-          tasks: [{ package: "@t3tools/mobile", task, source, savedMs: Math.round(savedMs) }],
-        }),
-      ),
-    );
-  },
-  (effect) => effect.pipe(Effect.timeout("5 seconds"), Effect.ignore),
-);
-
 /**
  * Install into an agent-device session the caller already opened (a device pool, a cloud
  * provider, or a local device). A cache miss builds here, as for a local device: the device
@@ -940,7 +895,6 @@ const installIntoSession = Effect.fn("nativeClient.installIntoSession")(function
   // agent-device scopes session ownership to the workspace (working directory) it runs in.
   const workspace = yield* HostProcess.WorkingDirectory;
   const deviceAbi = platform === "android" ? abi : null;
-  const task = deviceAbi ? `native-client:android-${deviceAbi}` : `native-client:${platform}`;
   const current = yield* fingerprint(platform);
   const key = `${platform}/${deviceAbi ? `development-${deviceAbi}` : "development"}/${current}`;
   const source = yield* sharedSource(home, key);
@@ -973,9 +927,7 @@ const installIntoSession = Effect.fn("nativeClient.installIntoSession")(function
   const artifact = fetched
     ? { source: "remote" as const, buildMs: 0 }
     : yield* Effect.gen(function* () {
-        const local = yield* resolveArtifact(home, platform, deviceAbi, current).pipe(
-          Effect.tapError(() => reportTelemetry(home, task, "failed", 0)),
-        );
+        const local = yield* resolveArtifact(home, platform, deviceAbi, current);
         // A build just shared the client, so the device can fetch it now too.
         if (local.source === "build" && (yield* downloadOnDevice)) return local;
         yield* Console.error(`Installing into agent-device session ${session}...`);
@@ -1003,12 +955,6 @@ const installIntoSession = Effect.fn("nativeClient.installIntoSession")(function
       workspace,
     );
   }
-  yield* reportTelemetry(
-    home,
-    task,
-    artifact.source === "build" ? "executed" : artifact.source,
-    artifact.buildMs,
-  );
   const seconds = Math.round(((yield* Clock.currentTimeMillis) - started) / 1000);
   yield* Console.error(
     `Installed into session ${session} in ${seconds}s (${artifact.source}).${metro ? "" : " Open it with Metro: --metro http://<this-machine>:8081."}`,
@@ -1123,8 +1069,6 @@ const main = Command.make(
         return yield* new NativeClientError({ message: `Unsupported Android ABI ${value}.` });
       return value;
     });
-    let task = `native-client:${platform}`;
-    let savedMs = 0;
     const operations = {
       fingerprint: fingerprint(platform),
       installedBinary: installedBinary(platform, device),
@@ -1138,9 +1082,7 @@ const main = Command.make(
       ),
       install: Effect.fn(function* (fingerprint: string) {
         const deviceAbi = yield* abi;
-        if (deviceAbi) task = `native-client:android-${deviceAbi}`;
         const artifact = yield* resolveArtifact(home, platform, deviceAbi, fingerprint);
-        savedMs = artifact.buildMs;
         yield* Console.error(`Installing on ${target.label}...`);
         yield* install(platform, device, artifact.file);
         return artifact.source;
@@ -1178,15 +1120,7 @@ const main = Command.make(
     const log = path.join(logs, `${stamp}-${platform}.log`);
     const result = yield* ensureClient(operations).pipe(
       Effect.provideService(BuildLog, environment.T3_NATIVE_CLIENT_VERBOSE === "1" ? null : log),
-      Effect.tapError(() => reportTelemetry(home, task, "failed", 0)),
     );
-    if (result.installed && result.source)
-      yield* reportTelemetry(
-        home,
-        task,
-        result.source === "build" ? "executed" : result.source,
-        result.source === "build" ? 0 : savedMs,
-      );
     const seconds = Math.round(((yield* Clock.currentTimeMillis) - started) / 1000);
     yield* Console.error(
       result.installed
