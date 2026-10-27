@@ -17,7 +17,6 @@ import {
   modelPreferencesMigrationPatch,
   resolveModelPreferences,
   isModelSelectionProviderEnabled,
-  parsePersistedServerObservabilitySettings,
   resolveSourceControlWriterModelSelection,
   resolveProjectAgentBrowserAccess,
   resolveProjectAutoPull,
@@ -229,32 +228,6 @@ describe("serverSettings helpers", () => {
     expect(reset.projectAgentBrowserAccessOverrides[firstProjectId]).toBeUndefined();
     expect(resolveProjectAutoPull(secondUpdate, firstProjectId, false)).toBe(false);
     expect(resolveProjectAgentBrowserAccess(secondUpdate, firstProjectId)).toBe(false);
-  });
-
-  it("parses lenient persisted settings JSON and trims observability URLs", () => {
-    expect(
-      parsePersistedServerObservabilitySettings(
-        JSON.stringify({
-          observability: {
-            otlpTracesUrl: "  http://localhost:4318/v1/traces  ",
-            otlpMetricsUrl: "  http://localhost:4318/v1/metrics  ",
-            otlpLogsUrl: "  http://localhost:4318/v1/logs  ",
-          },
-        }),
-      ),
-    ).toEqual({
-      otlpTracesUrl: "http://localhost:4318/v1/traces",
-      otlpMetricsUrl: "http://localhost:4318/v1/metrics",
-      otlpLogsUrl: "http://localhost:4318/v1/logs",
-    });
-  });
-
-  it("falls back cleanly when persisted settings are invalid", () => {
-    expect(parsePersistedServerObservabilitySettings("{")).toEqual({
-      otlpTracesUrl: undefined,
-      otlpMetricsUrl: undefined,
-      otlpLogsUrl: undefined,
-    });
   });
 
   it("still deep merges text generation selection when only options are provided", () => {

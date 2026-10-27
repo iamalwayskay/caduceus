@@ -53,9 +53,6 @@ function layerEnvironment(
     readonly resourcesPath?: string;
     readonly appVersion?: string;
     readonly processArch?: NodeJS.Architecture;
-    readonly otlpTracesUrl?: string;
-    readonly otlpMetricsUrl?: string;
-    readonly otlpLogsUrl?: string;
   },
 ) {
   return DesktopEnvironment.layer({
@@ -78,9 +75,6 @@ function layerEnvironment(
           T3CODE_MODE: "desktop",
           T3CODE_DESKTOP_LAN_HOST: "192.168.1.50",
           VITE_DEV_SERVER_URL: options?.devServerUrl,
-          T3CODE_OTLP_TRACES_URL: options?.otlpTracesUrl,
-          T3CODE_OTLP_METRICS_URL: options?.otlpMetricsUrl,
-          T3CODE_OTLP_LOGS_URL: options?.otlpLogsUrl,
         }),
       ),
     ),
@@ -678,54 +672,6 @@ describe("DesktopBackendConfiguration", () => {
     ),
   );
 
-  it.effect("resolveWsl carries the kill switch and resource attributes into the distro", () =>
-    Effect.gen(function* () {
-      const fileSystem = yield* FileSystem.FileSystem;
-      const baseDir = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "t3-desktop-backend-config-test-",
-      });
-
-      const previousWslEnv = process.env.WSLENV;
-      const previousDisabled = process.env.OTEL_SDK_DISABLED;
-      const previousResourceAttributes = process.env.OTEL_RESOURCE_ATTRIBUTES;
-      try {
-        delete process.env.WSLENV;
-        process.env.OTEL_SDK_DISABLED = "true";
-        process.env.OTEL_RESOURCE_ATTRIBUTES = "deployment.environment.name=staging";
-
-        yield* Effect.gen(function* () {
-          const configuration = yield* DesktopBackendConfiguration.DesktopBackendConfiguration;
-          const config = yield* configuration.resolveWsl({ port: 5050, distro: null });
-
-          assert.equal(config.env.OTEL_SDK_DISABLED, "true");
-          assert.include((config.env.WSLENV ?? "").split(":"), "OTEL_SDK_DISABLED");
-          assert.equal(config.env.OTEL_RESOURCE_ATTRIBUTES, "deployment.environment.name=staging");
-          assert.include((config.env.WSLENV ?? "").split(":"), "OTEL_RESOURCE_ATTRIBUTES");
-        }).pipe(
-          Effect.provide(
-            layerBackendConfiguration().pipe(
-              Layer.provideMerge(layerServerExposure),
-              Layer.provideMerge(DesktopAppSettings.layerTest()),
-              Layer.provideMerge(DesktopWslServerTree.layerTest()),
-              Layer.provideMerge(
-                DesktopWslEnvironment.layerTest({
-                  isAvailable: true,
-                  windowsToWslPath: () => Option.some("/mnt/c/repo/apps/server/src/index.ts"),
-                  getDistroIp: () => Option.some("172.27.0.99"),
-                }),
-              ),
-              Layer.provideMerge(layerEnvironment(baseDir, { platform: "win32" })),
-            ),
-          ),
-        );
-      } finally {
-        restoreEnv("WSLENV", previousWslEnv);
-        restoreEnv("OTEL_SDK_DISABLED", previousDisabled);
-        restoreEnv("OTEL_RESOURCE_ATTRIBUTES", previousResourceAttributes);
-      }
-    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
-  );
-
   it.effect("resolveWsl preserves existing WSLENV entries when forwarding backend secrets", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
@@ -736,16 +682,10 @@ describe("DesktopBackendConfiguration", () => {
       const previousWslEnv = process.env.WSLENV;
       const previousOpenAiKey = process.env.OPENAI_API_KEY;
       const previousAnthropicKey = process.env.ANTHROPIC_API_KEY;
-      const previousOtlpHeaders = process.env.T3CODE_OTLP_HEADERS;
-      const previousOtlpProtocol = process.env.T3CODE_OTLP_PROTOCOL;
-      const ambientOtel = Object.entries(process.env).filter(([name]) => name.startsWith("OTEL_"));
       try {
-        for (const [name] of ambientOtel) delete process.env[name];
         process.env.WSLENV = "GOPATH/p:OPENAI_API_KEY/u:EMPTY::AZURE_DEVOPS_EXT_PAT/u";
         process.env.OPENAI_API_KEY = "openai-key";
         process.env.ANTHROPIC_API_KEY = "anthropic-key";
-        process.env.T3CODE_OTLP_HEADERS = 'authorization="Bearer%20my-token"';
-        process.env.T3CODE_OTLP_PROTOCOL = "http/protobuf";
 
         yield* Effect.gen(function* () {
           const configuration = yield* DesktopBackendConfiguration.DesktopBackendConfiguration;
@@ -760,10 +700,9 @@ describe("DesktopBackendConfiguration", () => {
           assert.equal(config.httpBaseUrl.href, "http://172.27.0.99:5050/");
           assert.equal(config.env.OPENAI_API_KEY, "openai-key");
           assert.equal(config.env.ANTHROPIC_API_KEY, "anthropic-key");
-          assert.equal(config.env.T3CODE_OTLP_PROTOCOL, "http/protobuf");
           assert.equal(
             config.env.WSLENV,
-            "GOPATH/p:OPENAI_API_KEY/u:EMPTY::AZURE_DEVOPS_EXT_PAT/u:ANTHROPIC_API_KEY:T3CODE_OTLP_HEADERS:T3CODE_OTLP_PROTOCOL",
+            "GOPATH/p:OPENAI_API_KEY/u:EMPTY::AZURE_DEVOPS_EXT_PAT/u:ANTHROPIC_API_KEY",
           );
         }).pipe(
           Effect.provide(
@@ -786,9 +725,6 @@ describe("DesktopBackendConfiguration", () => {
         restoreEnv("WSLENV", previousWslEnv);
         restoreEnv("OPENAI_API_KEY", previousOpenAiKey);
         restoreEnv("ANTHROPIC_API_KEY", previousAnthropicKey);
-        restoreEnv("T3CODE_OTLP_HEADERS", previousOtlpHeaders);
-        restoreEnv("T3CODE_OTLP_PROTOCOL", previousOtlpProtocol);
-        for (const [name, value] of ambientOtel) restoreEnv(name, value);
       }
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
   );

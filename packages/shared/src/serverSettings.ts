@@ -18,14 +18,11 @@ import {
   ProviderDriverKind,
   ProviderInstanceId,
   type ServerProvider,
-  ServerSettings,
+  type ServerSettings,
   type ServerSettingsPatch,
   withIdleCompaction,
 } from "@t3tools/contracts";
-import * as Option from "effect/Option";
-import * as Schema from "effect/Schema";
 import { deepMerge } from "./Struct.ts";
-import { fromLenientJson } from "./schemaJson.ts";
 import { createModelSelection, readCustomModelEntries } from "./model.ts";
 import {
   getBackgroundActivityBaseProfile,
@@ -33,9 +30,6 @@ import {
   normalizeServerBackgroundActivitySettings,
   resolveBackgroundActivitySettings,
 } from "./backgroundActivitySettings.ts";
-
-const ServerSettingsJson = fromLenientJson(ServerSettings);
-const decodeServerSettingsJson = Schema.decodeUnknownOption(ServerSettingsJson);
 
 export function resolveProjectAgentBrowserAccess(
   settings: Pick<
@@ -175,43 +169,6 @@ export function resolveReviewGuideModelSelection(
     }
   }
   return resolveSourceControlWriterModelSelection(settings, providers, projectId);
-}
-
-export interface PersistedServerObservabilitySettings {
-  readonly otlpTracesUrl: string | undefined;
-  readonly otlpMetricsUrl: string | undefined;
-  readonly otlpLogsUrl: string | undefined;
-}
-
-function normalizePersistedServerSettingString(
-  value: string | null | undefined,
-): string | undefined {
-  const trimmed = value?.trim();
-  return trimmed && trimmed.length > 0 ? trimmed : undefined;
-}
-
-function extractPersistedServerObservabilitySettings(input: {
-  readonly observability?: {
-    readonly otlpTracesUrl?: string;
-    readonly otlpMetricsUrl?: string;
-    readonly otlpLogsUrl?: string;
-  };
-}): PersistedServerObservabilitySettings {
-  return {
-    otlpTracesUrl: normalizePersistedServerSettingString(input.observability?.otlpTracesUrl),
-    otlpMetricsUrl: normalizePersistedServerSettingString(input.observability?.otlpMetricsUrl),
-    otlpLogsUrl: normalizePersistedServerSettingString(input.observability?.otlpLogsUrl),
-  };
-}
-
-export function parsePersistedServerObservabilitySettings(
-  raw: string,
-): PersistedServerObservabilitySettings {
-  const decoded = decodeServerSettingsJson(raw);
-  if (Option.isSome(decoded)) {
-    return extractPersistedServerObservabilitySettings(decoded.value);
-  }
-  return { otlpTracesUrl: undefined, otlpMetricsUrl: undefined, otlpLogsUrl: undefined };
 }
 
 function shouldReplaceTextGenerationModelSelection(

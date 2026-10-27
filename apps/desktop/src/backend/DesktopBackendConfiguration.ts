@@ -1,6 +1,5 @@
 import * as NodeOS from "node:os";
 
-import { parsePersistedServerObservabilitySettings } from "@t3tools/shared/serverSettings";
 import { currentDesktopBootstrapToken } from "@t3tools/shared/desktopBootstrapToken";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
@@ -11,7 +10,6 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as PlatformError from "effect/PlatformError";
-import * as Schema from "effect/Schema";
 import * as SynchronizedRef from "effect/SynchronizedRef";
 
 import serverPackageJson from "../../../server/package.json" with { type: "json" };
@@ -24,18 +22,6 @@ import * as DesktopShellEnvironment from "../shell/DesktopShellEnvironment.ts";
 import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
 import * as DesktopWslEnvironment from "../wsl/DesktopWslEnvironment.ts";
 import * as DesktopWslServerTree from "../wsl/DesktopWslServerTree.ts";
-
-export class DesktopBackendObservabilitySettingsReadError extends Schema.TaggedError<DesktopBackendObservabilitySettingsReadError>()(
-  "DesktopBackendObservabilitySettingsReadError",
-  {
-    settingsPath: Schema.String,
-    cause: Schema.Defect(),
-  },
-) {
-  override get message(): string {
-    return `Failed to read persisted backend observability settings at ${this.settingsPath}.`;
-  }
-}
 
 export class DesktopBackendConfiguration extends Context.Service<
   DesktopBackendConfiguration,
@@ -56,18 +42,6 @@ export class DesktopBackendConfiguration extends Context.Service<
   }
 >()("@t3tools/desktop/backend/DesktopBackendConfiguration") {}
 
-interface BackendObservabilitySettings {
-  readonly otlpTracesUrl: Option.Option<string>;
-  readonly otlpMetricsUrl: Option.Option<string>;
-  readonly otlpLogsUrl: Option.Option<string>;
-}
-
-const emptyBackendObservabilitySettings: BackendObservabilitySettings = {
-  otlpTracesUrl: Option.none(),
-  otlpMetricsUrl: Option.none(),
-  otlpLogsUrl: Option.none(),
-};
-
 const DESKTOP_BACKEND_ENV_NAMES = [
   "T3CODE_PORT",
   "T3CODE_MODE",
@@ -82,35 +56,7 @@ const DESKTOP_BACKEND_ENV_NAMES = [
 ] as const;
 
 // Windows forwards these variables into WSL only through WSLENV.
-const WSL_FORWARDED_ENV_NAMES = [
-  "OPENAI_API_KEY",
-  "ANTHROPIC_API_KEY",
-  // Otherwise the WSL server keeps exporting to endpoints from the bootstrap.
-  "T3CODE_OTEL_SDK_DISABLED",
-  "OTEL_SDK_DISABLED",
-  "T3CODE_OTLP_HEADERS",
-  "T3CODE_OTLP_PROTOCOL",
-  // Untranslated T3 URLs must override bootstrap endpoints inside WSL, as they do on Windows.
-  "T3CODE_OTLP_TRACES_URL",
-  "T3CODE_OTLP_METRICS_URL",
-  "T3CODE_OTLP_LOGS_URL",
-  "OTEL_EXPORTER_OTLP_ENDPOINT",
-  "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT",
-  "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT",
-  "OTEL_EXPORTER_OTLP_LOGS_ENDPOINT",
-  "OTEL_EXPORTER_OTLP_HEADERS",
-  "OTEL_EXPORTER_OTLP_TRACES_HEADERS",
-  "OTEL_EXPORTER_OTLP_METRICS_HEADERS",
-  "OTEL_EXPORTER_OTLP_LOGS_HEADERS",
-  "OTEL_EXPORTER_OTLP_PROTOCOL",
-  "OTEL_EXPORTER_OTLP_TRACES_PROTOCOL",
-  "OTEL_EXPORTER_OTLP_METRICS_PROTOCOL",
-  "OTEL_EXPORTER_OTLP_LOGS_PROTOCOL",
-  "OTEL_TRACES_EXPORTER",
-  "OTEL_METRICS_EXPORTER",
-  "OTEL_LOGS_EXPORTER",
-  "OTEL_RESOURCE_ATTRIBUTES",
-] as const;
+const WSL_FORWARDED_ENV_NAMES = ["OPENAI_API_KEY", "ANTHROPIC_API_KEY"] as const;
 
 const WSL_SERVER_SYSTEM_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
 
@@ -145,19 +91,6 @@ const mergeWslEnv = (
   // Preserve empty segments and duplicates in the user's WSLENV; only append required variables.
   const parts = [existing, ...additions].filter((part) => part.length > 0);
   return parts.length > 0 ? parts.join(":") : undefined;
-};
-
-const logBackendObservabilitySettingsReadFailure = (
-  settingsPath: string,
-  cause: PlatformError.PlatformError,
-) => {
-  const error = new DesktopBackendObservabilitySettingsReadError({ settingsPath, cause });
-  return Effect.logWarning(error).pipe(
-    Effect.annotateLogs({
-      component: "desktop-backend-configuration",
-      error,
-    }),
-  );
 };
 
 function resourceMonitorBinaryName(platform: NodeJS.Platform): string {
@@ -198,46 +131,9 @@ const resolveResourceMonitorPath = Effect.fn(
   return Option.none<string>();
 });
 
-const readPersistedBackendObservabilitySettings = Effect.gen(function* () {
-  const fileSystem = yield* FileSystem.FileSystem;
-  const environment = yield* DesktopEnvironment.DesktopEnvironment;
-  const raw = yield* fileSystem.readFileString(environment.serverSettingsPath).pipe(
-    Effect.asSome,
-    Effect.catchTags({
-      PlatformError: (cause) =>
-        cause.reason._tag === "NotFound"
-          ? Effect.succeedNone
-          : logBackendObservabilitySettingsReadFailure(environment.serverSettingsPath, cause).pipe(
-              Effect.as(Option.none()),
-            ),
-    }),
-  );
-  if (Option.isNone(raw)) {
-    return emptyBackendObservabilitySettings;
-  }
-
-  const parsed = parsePersistedServerObservabilitySettings(raw.value);
-  return {
-    otlpTracesUrl: Option.fromNullishOr(parsed.otlpTracesUrl),
-    otlpMetricsUrl: Option.fromNullishOr(parsed.otlpMetricsUrl),
-    otlpLogsUrl: Option.fromNullishOr(parsed.otlpLogsUrl),
-  };
-});
-
-const readBackendObservabilitySettings = Effect.gen(function* () {
-  const environment = yield* DesktopEnvironment.DesktopEnvironment;
-  const persisted = yield* readPersistedBackendObservabilitySettings;
-  return {
-    otlpTracesUrl: Option.orElse(environment.otlpTracesUrl, () => persisted.otlpTracesUrl),
-    otlpMetricsUrl: Option.orElse(environment.otlpMetricsUrl, () => persisted.otlpMetricsUrl),
-    otlpLogsUrl: Option.orElse(environment.otlpLogsUrl, () => persisted.otlpLogsUrl),
-  } satisfies BackendObservabilitySettings;
-});
-
 interface SharedBootstrapInput {
   readonly bootstrapToken: string;
   readonly bootstrapSecret: string;
-  readonly observabilitySettings: BackendObservabilitySettings;
 }
 
 type WslPreflightRuntime =
@@ -464,21 +360,6 @@ const isLocalHostIpv4 = (ip: string): boolean => {
   return false;
 };
 
-const buildObservabilityFragment = (observabilitySettings: BackendObservabilitySettings) => ({
-  ...Option.match(observabilitySettings.otlpTracesUrl, {
-    onNone: () => ({}),
-    onSome: (otlpTracesUrl) => ({ otlpTracesUrl }),
-  }),
-  ...Option.match(observabilitySettings.otlpMetricsUrl, {
-    onNone: () => ({}),
-    onSome: (otlpMetricsUrl) => ({ otlpMetricsUrl }),
-  }),
-  ...Option.match(observabilitySettings.otlpLogsUrl, {
-    onNone: () => ({}),
-    onSome: (otlpLogsUrl) => ({ otlpLogsUrl }),
-  }),
-});
-
 const resolvePrimaryStartConfig = Effect.fn("desktop.backendConfiguration.resolvePrimary")(
   function* (
     input: SharedBootstrapInput & {
@@ -514,7 +395,6 @@ const resolvePrimaryStartConfig = Effect.fn("desktop.backendConfiguration.resolv
         onNone: () => ({}),
         onSome: (resourceMonitorPath) => ({ resourceMonitorPath }),
       }),
-      ...buildObservabilityFragment(input.observabilitySettings),
     };
 
     return {
@@ -574,7 +454,6 @@ const resolveWslStartConfig = Effect.fn("desktop.backendConfiguration.resolveWsl
     // PortSchema rejects 0 even when Tailscale Serve is disabled.
     tailscaleServeEnabled: false,
     tailscaleServePort: 443,
-    ...buildObservabilityFragment(input.observabilitySettings),
   };
 
   const archivePath = environment.path.join(environment.resourcesPath, WSL_RUNTIME_ARCHIVE_NAME);
@@ -743,14 +622,9 @@ export const make = Effect.gen(function* () {
       bootstrapSecret,
       yield* Clock.currentTimeMillis,
     );
-    const observabilitySettings = yield* readBackendObservabilitySettings.pipe(
-      Effect.provideService(FileSystem.FileSystem, fileSystem),
-      Effect.provideService(DesktopEnvironment.DesktopEnvironment, environment),
-    );
     return {
       bootstrapToken,
       bootstrapSecret,
-      observabilitySettings,
     } satisfies SharedBootstrapInput;
   });
 

@@ -74,17 +74,16 @@ describe("server config forward compatibility", () => {
 describe("ServerObservability", () => {
   const decodeServerObservability = Schema.decodeUnknownSync(ServerObservability);
 
-  it("rejects an unknown endpoint source", () => {
-    expect(() =>
+  it("decodes local diagnostic state", () => {
+    expect(
       decodeServerObservability({
         logsDirectoryPath: "/tmp/t3/logs",
         localTracingEnabled: true,
-        otlpTracesUrl: "https://collector.example.com/v1/traces",
-        otlpTracesSource: "cli",
-        otlpTracesEnabled: true,
-        otlpMetricsEnabled: false,
       }),
-    ).toThrow();
+    ).toEqual({
+      logsDirectoryPath: "/tmp/t3/logs",
+      localTracingEnabled: true,
+    });
   });
 });
 

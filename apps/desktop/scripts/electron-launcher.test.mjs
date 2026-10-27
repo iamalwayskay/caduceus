@@ -21,7 +21,7 @@ describe("electron development launcher", () => {
       VITE_DEV_SERVER_URL: "http://127.0.0.1:8526",
       T3CODE_PORT: "16566",
       T3CODE_HOME: "/tmp/t3",
-      T3CODE_OTLP_PROTOCOL: "http/protobuf",
+      T3CODE_COMMIT_HASH: "abc123",
     });
 
     assert.include(
@@ -30,7 +30,7 @@ describe("electron development launcher", () => {
     );
     assert.include(
       environmentScript,
-      "if [ -z \"${T3CODE_OTLP_PROTOCOL:-}\" ]; then export T3CODE_OTLP_PROTOCOL='http/protobuf'; fi",
+      "if [ -z \"${T3CODE_COMMIT_HASH:-}\" ]; then export T3CODE_COMMIT_HASH='abc123'; fi",
     );
     assert.notInclude(environmentScript, "\nexport VITE_DEV_SERVER_URL=");
   });
