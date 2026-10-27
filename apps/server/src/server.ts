@@ -165,7 +165,6 @@ import * as DesktopTelemetryReceiver from "./resourceTelemetry/DesktopTelemetryR
 import * as NativeTelemetryClient from "./resourceTelemetry/NativeTelemetryClient.ts";
 import * as ResourceAttribution from "./resourceTelemetry/ResourceAttribution.ts";
 import * as ResourceMonitorBinary from "./resourceTelemetry/ResourceMonitorBinary.ts";
-import * as ProcessGroupMetrics from "./resourceTelemetry/ProcessGroupMetrics.ts";
 import * as ResourceTelemetry from "./resourceTelemetry/ResourceTelemetry.ts";
 import * as AntigravityUsage from "./provider/Drivers/AntigravityUsage.ts";
 import { MuseUsageHome } from "@t3tools/provider-muse/server";
@@ -280,7 +279,6 @@ const layerResourceDiagnostics = Layer.mergeAll(
   layerResourceTelemetry,
   ProcessDiagnostics.layer.pipe(Layer.provide(layerResourceTelemetry)),
   ProcessResourceMonitor.layer.pipe(Layer.provide(layerResourceTelemetry)),
-  ProcessGroupMetrics.layer.pipe(Layer.provide(layerResourceTelemetry)),
 );
 
 const layerRelayClient = Layer.unwrap(
@@ -707,7 +705,6 @@ const layerMakeRoutes = Layer.mergeAll(
       Layer.provide(WebhookRoute.layer.pipe(Layer.provide(RelayDeliveryProof.layer))),
       Layer.provide(AuthHttp.layerAuthenticatedAuth),
     ),
-    ServerHttp.layerOtlpTracesProxyRoute,
     ServerHttp.layerAssetRoute,
     ServerHttp.layerAttachmentUploadRoute,
     GuestHttp.layer,

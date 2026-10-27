@@ -9,8 +9,6 @@ import {
   EnvironmentId,
   type ServerLifecycleStreamEvent,
 } from "@t3tools/contracts";
-import { DEFAULT_SIGNAL_EXPORT } from "@t3tools/shared/observability";
-import * as OtelEnvironment from "@t3tools/shared/otelEnvironment";
 import { HttpServer } from "effect/http";
 import * as NetAddress from "effect/net/NetAddress";
 import * as Deferred from "effect/Deferred";
@@ -20,7 +18,6 @@ import * as Fiber from "effect/Fiber";
 import * as Ref from "effect/Ref";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
-import * as Option from "effect/Option";
 
 import * as GitVcsDriver from "./vcs/GitVcsDriver.ts";
 
@@ -81,13 +78,6 @@ it.effect.each([
           traceBatchWindowMs: 200,
           traceMaxBytes: 1024,
           traceMaxFiles: 1,
-          otlpTracesUrl: undefined,
-          otlpMetricsUrl: undefined,
-          otlpLogsUrl: undefined,
-          otlpTracesExport: DEFAULT_SIGNAL_EXPORT,
-          otlpMetricsExport: DEFAULT_SIGNAL_EXPORT,
-          otlpLogsExport: DEFAULT_SIGNAL_EXPORT,
-          otelEnvironment: OtelEnvironment.none,
           staticDir: undefined,
           devAllowedOrigins: [],
           desktopBootstrapToken: undefined,

@@ -304,7 +304,7 @@ it.layer(NodeServices.layer)("server settings", (it) => {
       const serverSettings = yield* ServerSettingsModule.ServerSettingsService;
 
       yield* serverSettings.updateSettings({
-        observability: { otlpTracesUrl: "http://localhost:4318/v1/traces" },
+        storageCleanup: { worktreeAfterDays: 30 },
         textGenerationModelSelection: {
           instanceId: ProviderInstanceId.make("codex"),
           model: DEFAULT_SERVER_SETTINGS.textGenerationModelSelection.model,
@@ -320,14 +320,14 @@ it.layer(NodeServices.layer)("server settings", (it) => {
       });
 
       const next = yield* serverSettings.updateSettings({
-        observability: { otlpMetricsUrl: "http://localhost:4318/v1/metrics" },
+        storageCleanup: { logsAfterDays: 15 },
         textGenerationModelSelection: {
           options: [{ id: "fastMode", value: false }],
         },
       });
 
-      assert.equal(next.observability.otlpTracesUrl, "http://localhost:4318/v1/traces");
-      assert.equal(next.observability.otlpMetricsUrl, "http://localhost:4318/v1/metrics");
+      assert.equal(next.storageCleanup.worktreeAfterDays, 30);
+      assert.equal(next.storageCleanup.logsAfterDays, 15);
       assert.deepEqual(
         next.textGenerationModelSelection,
         createModelSelection(
@@ -354,12 +354,12 @@ it.layer(NodeServices.layer)("server settings", (it) => {
         contents: `{ "responseStreamingMode": "turn" }`,
       });
       yield* serverSettings.updateSettings({
-        observability: { otlpTracesUrl: "http://localhost:4318/v1/traces" },
+        defaultAutoPull: true,
       });
 
       const saved = yield* decodeServerSettingsJson(yield* fs.readFileString(config.settingsPath));
       assert.equal(saved.responseStreamingMode, "turn");
-      assert.equal(saved.observability.otlpTracesUrl, "http://localhost:4318/v1/traces");
+      assert.equal(saved.defaultAutoPull, true);
 
       yield* writeFileStringAtomically({
         filePath: config.settingsPath,
@@ -395,7 +395,7 @@ it.layer(NodeServices.layer)("server settings", (it) => {
 
       const error = yield* Effect.flip(
         serverSettings.updateSettings({
-          observability: { otlpTracesUrl: "http://localhost:4318/v1/traces" },
+          defaultAutoPull: true,
         }),
       );
 

@@ -108,7 +108,6 @@ minimumReleaseAgeExclude:
   - "@alchemy.run/sql@2.0.0-beta.84"
   - "@distilled.cloud/acme@1.0.0-rc.17"
   - "@distilled.cloud/aws4signer@1.0.0-rc.17"
-  - "@distilled.cloud/axiom@1.0.0-rc.17"
   - "@distilled.cloud/cloudflare@1.0.0-rc.17"
   - "@distilled.cloud/core@1.0.0-rc.17"
   - "@distilled.cloud/iceberg@1.0.0-rc.17"

@@ -12,12 +12,7 @@ import * as Layer from "effect/Layer";
 import * as Redactable from "effect/Redactable";
 import * as Path from "effect/Path";
 import * as Tracer from "effect/Tracer";
-import * as HttpClient from "effect/http/HttpClient";
-import * as HttpClientResponse from "effect/http/HttpClientResponse";
 import * as TestConsole from "effect/testing/TestConsole";
-
-import { DEFAULT_SIGNAL_EXPORT } from "@t3tools/shared/observability";
-import * as OtelEnvironment from "@t3tools/shared/otelEnvironment";
 
 import * as ServerConfig from "./config.ts";
 import * as ExternalLauncher from "./process/externalLauncher.ts";
@@ -27,28 +22,6 @@ import {
   logBrowserAutoOpenUnavailable,
   maybeOpenBrowser,
 } from "./serverRuntimeStartup.ts";
-
-interface ExportedRequest {
-  readonly url: string;
-  readonly headers: Readonly<Record<string, string>>;
-  readonly body: string;
-}
-
-const layerCollector = (requests: Array<ExportedRequest>) =>
-  Layer.succeed(
-    HttpClient.HttpClient,
-    HttpClient.make((request) =>
-      Effect.sync(() => {
-        requests.push({
-          url: request.url,
-          headers: request.headers,
-          body:
-            request.body._tag === "Uint8Array" ? new TextDecoder().decode(request.body.body) : "",
-        });
-        return HttpClientResponse.fromWeb(request, new Response(null, { status: 200 }));
-      }),
-    ),
-  );
 
 const layerConfig = (overrides: Partial<ServerConfig.ServerConfig["Service"]>) =>
   Layer.effect(
@@ -64,13 +37,6 @@ const layerConfig = (overrides: Partial<ServerConfig.ServerConfig["Service"]>) =
         traceBatchWindowMs: 200,
         traceMaxBytes: 1024,
         traceMaxFiles: 1,
-        otlpTracesUrl: undefined,
-        otlpMetricsUrl: undefined,
-        otlpLogsUrl: undefined,
-        otlpTracesExport: DEFAULT_SIGNAL_EXPORT,
-        otlpMetricsExport: DEFAULT_SIGNAL_EXPORT,
-        otlpLogsExport: DEFAULT_SIGNAL_EXPORT,
-        otelEnvironment: OtelEnvironment.none,
         cwd: baseDir,
         baseDir,
         ...derivedPaths,
@@ -97,15 +63,13 @@ const layerConfig = (overrides: Partial<ServerConfig.ServerConfig["Service"]>) =
 
 /**
  * Runs `program` (one log line by default) inside a span so the tracer logger
- * has somewhere to attach an event, then reports both what the collector
- * received and what landed on the span.
+ * has somewhere to attach an event, then reports what landed on the span.
  */
 const logInSpanThrough = (
   overrides: Partial<ServerConfig.ServerConfig["Service"]>,
   program: Effect.Effect<void> = Effect.log("server logger under test"),
 ) =>
   Effect.gen(function* () {
-    const requests: Array<ExportedRequest> = [];
     const spans: Array<Tracer.NativeSpan> = [];
     const layerTracer = Layer.succeed(
       Tracer.Tracer,
@@ -120,16 +84,10 @@ const logInSpanThrough = (
     yield* program.pipe(
       Effect.withSpan("server-logger-test"),
       Effect.provide(
-        Layer.mergeAll(
-          ServerLogger.layer.pipe(
-            Layer.provide(layerConfig(overrides)),
-            Layer.provide(layerCollector(requests)),
-          ),
-          layerTracer,
-        ),
+        Layer.mergeAll(ServerLogger.layer.pipe(Layer.provide(layerConfig(overrides))), layerTracer),
       ),
     );
-    return { requests, spans };
+    return { spans };
   });
 
 const printThroughConsole = (fields: object) =>
@@ -142,43 +100,13 @@ const printThroughConsole = (fields: object) =>
       },
     } satisfies Console.Console;
     yield* Effect.logWarning("pull request watch check failed", fields).pipe(
-      Effect.provide(
-        ServerLogger.layer.pipe(Layer.provide(layerConfig({})), Layer.provide(layerCollector([]))),
-      ),
+      Effect.provide(ServerLogger.layer.pipe(Layer.provide(layerConfig({})))),
       Effect.provideService(Console.Console, testConsole),
     );
     return printed.join("\n");
   });
 
 describe("ServerLoggerLive", () => {
-  it.effect("exports the operator's service instance id instead of a generated one", () =>
-    Effect.gen(function* () {
-      const { requests } = yield* logInSpanThrough({
-        otlpLogsUrl: "https://collector.example.com/v1/logs",
-        otelEnvironment: {
-          ...OtelEnvironment.none,
-          resourceAttributes: { "service.instance.id": "pod-7" },
-        },
-      });
-
-      const body = requests.map((request) => request.body).join("\n");
-      assert.include(body, '"key":"service.instance.id","value":{"stringValue":"pod-7"}');
-    }),
-  );
-
-  it.effect("exports a resource that names whether the desktop app launched the server", () =>
-    Effect.gen(function* () {
-      const { requests } = yield* logInSpanThrough({
-        otlpLogsUrl: "https://collector.example.com/v1/logs",
-        mode: "desktop",
-      });
-
-      const body = requests.map((request) => request.body).join("\n");
-      assert.include(body, '"key":"t3code.server.managed_by","value":{"stringValue":"desktop"}');
-      assert.notInclude(body, "service.mode");
-    }),
-  );
-
   it.effect("prints a cause passed as a log field instead of collapsing it", () =>
     Effect.gen(function* () {
       const output = yield* printThroughConsole({
@@ -230,16 +158,9 @@ describe("ServerLoggerLive", () => {
       Effect.andThen(logBrowserAutoOpenUnavailable),
     );
 
-    it.effect("prints the full URL but keeps its token out of exported log records", () =>
+    it.effect("prints the full pairing URL", () =>
       Effect.gen(function* () {
-        const { requests } = yield* logInSpanThrough(
-          { otlpLogsUrl: "https://collector.example.com/v1/logs" },
-          announce,
-        );
-
-        const body = requests.map((request) => request.body).join("\n");
-        assert.include(body, "Authentication required");
-        assert.notInclude(body, pairingToken);
+        yield* logInSpanThrough({}, announce);
         const printed = (yield* TestConsole.logLines).map((line) =>
           Array.isArray(line) ? line.join(" ") : String(line),
         );

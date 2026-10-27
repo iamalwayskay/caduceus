@@ -7,9 +7,7 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 
-import { DEFAULT_SIGNAL_EXPORT } from "@t3tools/shared/observability";
 import * as HostProcess from "@t3tools/shared/HostProcess";
-import * as OtelEnvironment from "@t3tools/shared/otelEnvironment";
 
 import * as ServerSecretStore from "../auth/ServerSecretStore.ts";
 import {
@@ -48,13 +46,6 @@ const makeServerConfig = Effect.fn(function* (baseDir: string) {
     traceBatchWindowMs: 200,
     traceMaxBytes: 10 * 1024 * 1024,
     traceMaxFiles: 10,
-    otlpTracesUrl: undefined,
-    otlpMetricsUrl: undefined,
-    otlpLogsUrl: undefined,
-    otlpTracesExport: DEFAULT_SIGNAL_EXPORT,
-    otlpMetricsExport: DEFAULT_SIGNAL_EXPORT,
-    otlpLogsExport: DEFAULT_SIGNAL_EXPORT,
-    otelEnvironment: OtelEnvironment.none,
     cwd: process.cwd(),
     baseDir,
     mode: "web",

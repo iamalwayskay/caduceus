@@ -1659,30 +1659,6 @@ export const layerWsRpc = (
           observability: {
             logsDirectoryPath: config.logsDir,
             localTracingEnabled: true,
-            ...(config.otlpTracesUrl !== undefined
-              ? {
-                  otlpTracesUrl: config.otlpTracesUrl,
-                  otlpTracesSource: config.otlpTracesSource,
-                  otlpTracesVariable: config.otlpTracesVariable,
-                }
-              : {}),
-            otlpTracesEnabled: config.otlpTracesUrl !== undefined,
-            ...(config.otlpMetricsUrl !== undefined
-              ? {
-                  otlpMetricsUrl: config.otlpMetricsUrl,
-                  otlpMetricsSource: config.otlpMetricsSource,
-                  otlpMetricsVariable: config.otlpMetricsVariable,
-                }
-              : {}),
-            otlpMetricsEnabled: config.otlpMetricsUrl !== undefined,
-            ...(config.otlpLogsUrl !== undefined
-              ? {
-                  otlpLogsUrl: config.otlpLogsUrl,
-                  otlpLogsSource: config.otlpLogsSource,
-                  otlpLogsVariable: config.otlpLogsVariable,
-                }
-              : {}),
-            otlpLogsEnabled: config.otlpLogsUrl !== undefined,
           },
           settings,
           shellResumeCompletionMarker: true,
