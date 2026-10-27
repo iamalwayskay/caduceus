@@ -150,6 +150,7 @@ describe("t3 server command safety", () => {
           "account",
           "login",
           "clients",
+          "connect",
           "conenct",
           "package.json",
           "C:new-project",

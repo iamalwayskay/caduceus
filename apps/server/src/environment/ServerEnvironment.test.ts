@@ -219,7 +219,7 @@ it.layer(NodeServices.layer)("ServerEnvironmentLive", (it) => {
     }),
   );
 
-  it.effect("reports agent activity publishing from the current secret state", () =>
+  it.effect("keeps agent activity publishing disabled despite legacy cloud secrets", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const baseDir = yield* fileSystem.makeTempDirectoryScoped({
@@ -249,7 +249,7 @@ it.layer(NodeServices.layer)("ServerEnvironmentLive", (it) => {
 
         yield* secrets.set(RELAY_URL_SECRET, encode("https://relay.example"));
         const linked = yield* serverEnvironment.getDescriptor;
-        expect(linked.capabilities.agentActivityPublishing).toBe(true);
+        expect(linked.capabilities.agentActivityPublishing).toBe(false);
 
         yield* secrets.set(PUBLISH_AGENT_ACTIVITY_SECRET, encode("false"));
         const disabled = yield* serverEnvironment.getDescriptor;

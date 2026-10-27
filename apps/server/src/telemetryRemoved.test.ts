@@ -254,3 +254,31 @@ it("contains no outbound telemetry publishers, configuration, routes, or identit
 
   expect(matches, matches.join("\n")).toEqual([]);
 });
+
+it("keeps hosted Connect infrastructure out of server runtime entry points", () => {
+  const entryPoints = [
+    "apps/server/src/binCli.ts",
+    "apps/server/src/server.ts",
+    "apps/server/src/serverRuntimeStartup.ts",
+    "apps/server/src/environment/ServerEnvironment.ts",
+  ] as const;
+  const forbidden = [
+    "AgentAwarenessRelay",
+    "CloudCliState",
+    "CloudCliTokenManager",
+    "CloudLink",
+    "CloudManagedEndpointRuntime",
+    "HeldHooksWaker",
+    "RelayClient.layerCloudflared",
+    "connectCommand",
+    "hasCloudPublicConfig",
+    "readAgentActivityPublishingActive",
+  ] as const;
+
+  for (const relative of entryPoints) {
+    const source = NodeFS.readFileSync(NodePath.join(repositoryRoot, relative), "utf8");
+    for (const marker of forbidden) {
+      expect(source, `${relative} must not register ${marker}`).not.toContain(marker);
+    }
+  }
+});
