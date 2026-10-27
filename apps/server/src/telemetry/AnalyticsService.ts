@@ -2,7 +2,10 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 
-import type { TelemetryOwner } from "./Identify.ts";
+export interface TelemetryOwner {
+  readonly source: "connect" | "openai" | "claude" | "device";
+  readonly ownerId: string;
+}
 
 // Product analytics remain inert regardless of runtime configuration.
 const noOpAnalytics = {

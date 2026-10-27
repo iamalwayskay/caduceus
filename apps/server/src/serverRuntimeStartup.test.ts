@@ -11,6 +11,7 @@ import {
 } from "@t3tools/contracts";
 import { DEFAULT_SIGNAL_EXPORT } from "@t3tools/shared/observability";
 import * as OtelEnvironment from "@t3tools/shared/otelEnvironment";
+import * as HostProcess from "@t3tools/shared/HostProcess";
 import { HttpServer } from "effect/http";
 import * as NetAddress from "effect/net/NetAddress";
 import * as Deferred from "effect/Deferred";
@@ -21,6 +22,7 @@ import * as Fiber from "effect/Fiber";
 import * as Ref from "effect/Ref";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
+import * as Option from "effect/Option";
 
 import * as GitVcsDriver from "./vcs/GitVcsDriver.ts";
 
@@ -52,7 +54,7 @@ it.effect.each([
   "disabled-default",
   "launch-failure",
   "project-failure",
-] as const)("keeps bootstrap launch failures separate from project failures: %s", (scenario) =>
+] as const)("never reads analytics identity during startup: %s", (scenario) =>
   Effect.scoped(
     Effect.gen(function* () {
       const projectId = ProjectId.make("bootstrap-project");
@@ -60,6 +62,8 @@ it.effect.each([
         scenario === "disabled-default" ? "custom" : "codex",
       );
       const events: ServerLifecycleStreamEvent[] = [];
+      const identityReads: string[] = [];
+      const browserReached = yield* Deferred.make<void>();
       const recovery = {
         terminalizedRuns: 0,
         stoppedSessions: 0,
@@ -100,7 +104,7 @@ it.effect.each([
           host: "localhost",
           port: 3773,
           devUrl: undefined,
-          noBrowser: true,
+          noBrowser: false,
           startupPresentation: "browser",
           autoBootstrapProjectFromCwd: true,
         }),
@@ -153,6 +157,7 @@ it.effect.each([
         }),
         Layer.mock(ProjectStore.ProjectStoreV2)({}),
         Layer.mock(ProjectService.ProjectService)({
+          snapshot: Effect.succeed({ projects: [], updatedAt: "2026-10-27T00:00:00Z" }),
           bootstrap: () =>
             scenario === "project-failure"
               ? Effect.die("project bootstrap failed")
@@ -210,12 +215,28 @@ it.effect.each([
           prepareTrial: Effect.succeed(undefined),
         }),
         Layer.mock(GitVcsDriver.GitVcsDriver)({}),
-        Layer.mock(AnalyticsService.AnalyticsService)({}),
-        // No provider logins or Connect link, so startup records no owners.
-        FileSystem.layerNoop({}),
-        Layer.mock(ServerSecretStore.ServerSecretStore)({ get: () => Effect.succeedNone }),
-        Layer.mock(EnvironmentAuth.EnvironmentAuth)({}),
-        Layer.mock(ExternalLauncher.ExternalLauncher)({}),
+        AnalyticsService.layer,
+        Layer.succeed(HostProcess.HomeDirectory, "/analytics-privacy-home"),
+        FileSystem.layerNoop({
+          readFileString: (filePath) =>
+            Effect.sync(() => {
+              identityReads.push(filePath);
+              return "{}";
+            }),
+        }),
+        Layer.mock(ServerSecretStore.ServerSecretStore)({
+          get: (key) =>
+            Effect.sync(() => {
+              identityReads.push(`secret:${key}`);
+              return Option.none();
+            }),
+        }),
+        Layer.mock(EnvironmentAuth.EnvironmentAuth)({
+          issueStartupPairingUrl: (target) => Effect.succeed(target),
+        }),
+        Layer.mock(ExternalLauncher.ExternalLauncher)({
+          launchBrowser: () => Deferred.succeed(browserReached, undefined),
+        }),
         Layer.mock(HttpServer.HttpServer)({
           address: NetAddress.inetAddressFromIpStringUnsafe("127.0.0.1", 3773),
         }),
@@ -229,6 +250,8 @@ it.effect.each([
         if (scenario === "project-failure") {
           assert.isUndefined(welcome);
         } else {
+          yield* Deferred.await(browserReached);
+          assert.deepStrictEqual(identityReads, []);
           assert.isDefined(welcome);
           if (welcome?.type === "welcome") {
             assert.equal(welcome.payload.bootstrapProjectId, projectId);
@@ -237,7 +260,7 @@ it.effect.each([
         }
       }).pipe(
         Effect.provide(ServerRuntimeStartup.layerWithOptions().pipe(Layer.provide(dependencies))),
-        Effect.provideService(ServerActivation, Effect.never),
+        Effect.provideService(ServerActivation, Effect.void),
       );
     }),
   ),
