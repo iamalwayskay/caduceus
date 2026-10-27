@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vite-plus/test";
 import * as Schema from "effect/Schema";
 
-import { RelayDeviceRegistrationRequest } from "./relay.ts";
+import { RelayApi, RelayDeviceRegistrationRequest } from "./relay.ts";
+
+it("does not expose a mobile telemetry ingest group", () => {
+  expect(Reflect.has(RelayApi.groups, "mobileTelemetry")).toBe(false);
+});
 
 const decodeDevice = Schema.decodeUnknownExit(RelayDeviceRegistrationRequest);
 const device = {

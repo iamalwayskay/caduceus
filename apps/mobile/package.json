@@ -46,7 +46,6 @@
     "measure-renders": "node scripts/measure-renders.mts",
     "generate": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/generate-uniwind-themes.mts",
     "generate:highlights": "node scripts/generate-highlights.mts",
-    "eas-build-on-success": "node scripts/upload-sourcemaps.mts build",
     "test": "vp test run --project unit --project react",
     "typecheck": "tsc --noEmit"
   },

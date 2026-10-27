@@ -164,9 +164,6 @@ settings:
 
 catalogs:
   default:
-    '@alchemy.run/axiom':
-      specifier: 2.0.0-beta.84
-      version: 2.0.0-beta.84
     '@alchemy.run/cloudflare':
       specifier: 2.0.0-beta.84
       version: 2.0.0-beta.84
@@ -1296,9 +1293,6 @@ importers:
 
   infra/relay:
     dependencies:
-      '@alchemy.run/axiom':
-        specifier: 'catalog:'
-        version: 2.0.0-beta.84(74118100341fd69edb1510aa7b7f1bd2)
       '@alchemy.run/cloudflare':
         specifier: 'catalog:'
         version: 2.0.0-beta.84(24ce6902b7189b66a257867375b8f56d)
@@ -2348,12 +2342,6 @@ packages:
 
   '@alchemy.run/acme@2.0.0-beta.84':
     resolution: {integrity: sha512-ma7HaEN5K7hsNlSkK7CEGn+08hKi4xP1puEAoSO7UACXc/j/2gZKljuztADyCOKOdp8nIMJ/zH12Qs7J11E8cQ==}
-    peerDependencies:
-      alchemy: 2.0.0-beta.84
-      effect: 4.0.5
-
-  '@alchemy.run/axiom@2.0.0-beta.84':
-    resolution: {integrity: sha512-7kZpp2Trdw7pp/27EWspAcXxcNQfxyFLwY0P/WjnDHg/WqNK0AHFNBGgQoY6jI/vA8YO5DxdzfzI53Tj6hCRZA==}
     peerDependencies:
       alchemy: 2.0.0-beta.84
       effect: 4.0.5
@@ -3438,11 +3426,6 @@ packages:
 
   '@distilled.cloud/aws4signer@1.0.0-rc.17':
     resolution: {integrity: sha512-4wOoFuiadiKOEfDcL0VwGwg4XmZ3vmMxrNJAnTKf87k2WN2Shs7KeUp4GS1TzGGO3NrrpvVw8RFK+dOomDMj5w==}
-    peerDependencies:
-      effect: 4.0.5
-
-  '@distilled.cloud/axiom@1.0.0-rc.17':
-    resolution: {integrity: sha512-QRjfgxQsajursE+ar/urY1d3qrjmyjjZEnxNZnlJc7G/2o1p863ClcIwlyAe6u8CfeGf6HL/tc3GVmD4yHek2g==}
     peerDependencies:
       effect: 4.0.5
 
@@ -8568,13 +8551,6 @@ packages:
     resolution: {integrity: sha512-KfYbmpRm0VbLjEvVa9yGwCi9GI34xvi7A/HXYWQO65CSD2u3MczUJSuwXKFIxlGsgBQizV9q5J9NHj4VG0n+pA==}
     engines: {node: '>=12.0.0'}
 
-  expo-app-metrics@58.0.14:
-    resolution: {integrity: sha512-Bj/Bx3s5woOKThUcqucmDOdOAxmyHr232KbnOBD8SoA/iUo7E4RBWvRT8DwZOmLJ7H1wFK2ckFTiNoDFB+Ag+Q==}
-    peerDependencies:
-      expo: '*'
-      react: '*'
-      react-native: '*'
-
   expo-application@58.1.2:
     resolution: {integrity: sha512-WYFdNHGaxe/j69oYREhK0cKsKYszuIuz399WXYCP+M1grfO+FCWB/RbuMgaXJsLWlzqhNjA/zLgfJ+33FwrQvw==}
     peerDependencies:
@@ -12306,13 +12282,6 @@ snapshots:
       alchemy: 2.0.0-beta.84(patch_hash=824006659fa28ca31e490ce1fc3611f77436005ce9fa0f638be46564133cf042)(@effect/platform-node@4.0.5(bufferutil@4.1.0)(effect@4.0.5)(redis@6.2.1)(utf-8-validate@6.0.6))(@effect/vitest@4.0.5(patch_hash=2731c9c3761c595f25ddc625a7d61ca376b389d5b3049ecb837c8940f21cfa02)(@astrojs/compiler-rs@0.5.1)(@tsc-rs/typescript@0.8.0)(@types/node@24.12.4)(@vitest/browser-playwright@5.0.5)(@vitest/ui@5.0.5)(@volar/typescript@2.4.28(@tsc-rs/typescript@0.8.0))(bufferutil@4.1.0)(effect@4.0.5)(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(playwright@1.60.0)(terser@5.48.0)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0))(@types/react@19.3.0)(@voidzero-dev/vite-plus-core@1.4.0(@tsc-rs/typescript@0.8.0)(@types/node@24.12.4)(@volar/typescript@2.4.28(@tsc-rs/typescript@0.8.0))(esbuild@0.28.2)(jiti@2.7.0)(terser@5.48.0)(unrun@0.2.39)(yaml@2.9.0))(effect@4.0.5)(react-devtools-core@6.1.5(bufferutil@4.1.0)(utf-8-validate@6.0.6))(ws@8.22.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))
       effect: 4.0.5
 
-  '@alchemy.run/axiom@2.0.0-beta.84(74118100341fd69edb1510aa7b7f1bd2)':
-    dependencies:
-      '@distilled.cloud/axiom': 1.0.0-rc.17(effect@4.0.5)
-      '@distilled.cloud/core': 1.0.0-rc.17(effect@4.0.5)
-      alchemy: 2.0.0-beta.84(patch_hash=824006659fa28ca31e490ce1fc3611f77436005ce9fa0f638be46564133cf042)(@effect/platform-node@4.0.5(bufferutil@4.1.0)(effect@4.0.5)(redis@6.2.1)(utf-8-validate@6.0.6))(@effect/vitest@4.0.5(patch_hash=2731c9c3761c595f25ddc625a7d61ca376b389d5b3049ecb837c8940f21cfa02)(@astrojs/compiler-rs@0.5.1)(@tsc-rs/typescript@0.8.0)(@types/node@24.12.4)(@vitest/browser-playwright@5.0.5)(@vitest/ui@5.0.5)(@volar/typescript@2.4.28(@tsc-rs/typescript@0.8.0))(bufferutil@4.1.0)(effect@4.0.5)(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(playwright@1.60.0)(terser@5.48.0)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0))(@types/react@19.3.0)(@voidzero-dev/vite-plus-core@1.4.0(@tsc-rs/typescript@0.8.0)(@types/node@24.12.4)(@volar/typescript@2.4.28(@tsc-rs/typescript@0.8.0))(esbuild@0.28.2)(jiti@2.7.0)(terser@5.48.0)(unrun@0.2.39)(yaml@2.9.0))(effect@4.0.5)(react-devtools-core@6.1.5(bufferutil@4.1.0)(utf-8-validate@6.0.6))(ws@8.22.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))
-      effect: 4.0.5
-
   '@alchemy.run/cloudflare-runtime@2.0.0-beta.84(@distilled.cloud/cloudflare@1.0.0-rc.17(effect@4.0.5))(@effect/platform-node@4.0.5(bufferutil@4.1.0)(effect@4.0.5)(redis@6.2.1)(utf-8-validate@6.0.6))(@tsc-rs/typescript@0.8.0)(@types/node@24.12.4)(@voidzero-dev/vite-plus-core@1.4.0(@tsc-rs/typescript@0.8.0)(@types/node@24.12.4)(@volar/typescript@2.4.28(@tsc-rs/typescript@0.8.0))(esbuild@0.28.2)(jiti@2.7.0)(terser@5.48.0)(unrun@0.2.39)(yaml@2.9.0))(effect@4.0.5)(rolldown@1.2.13)':
     dependencies:
       '@alchemy.run/node-utils': 2.0.0-beta.84
@@ -13387,11 +13356,6 @@ snapshots:
       effect: 4.0.5
 
   '@distilled.cloud/aws4signer@1.0.0-rc.17(effect@4.0.5)':
-    dependencies:
-      '@distilled.cloud/core': 1.0.0-rc.17(effect@4.0.5)
-      effect: 4.0.5
-
-  '@distilled.cloud/axiom@1.0.0-rc.17(effect@4.0.5)':
     dependencies:
       '@distilled.cloud/core': 1.0.0-rc.17(effect@4.0.5)
       effect: 4.0.5
@@ -18206,13 +18170,6 @@ snapshots:
       eventsource-parser: 3.1.0
 
   expect-type@1.4.0: {}
-
-  expo-app-metrics@58.0.14(expo@58.0.14)(react-native@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(bufferutil@4.1.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(react@19.3.0):
-    dependencies:
-      expo: 58.0.14(277a83826bb26ba15256633fefeb0bc2)
-      expo-updates-interface: 58.0.1(expo@58.0.14)
-      react: 19.3.0
-      react-native: 0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(bufferutil@4.1.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(supports-color@8.1.1)(utf-8-validate@6.0.6)
 
   expo-application@58.1.2(expo@58.0.14):
     dependencies:
