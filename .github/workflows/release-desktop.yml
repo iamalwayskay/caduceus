@@ -243,9 +243,6 @@ jobs:
       - name: Build CLI single-executable
         if: inputs.cli_archive
         shell: bash
-        env:
-          # The executable bundles the server again, so it needs the same stamp
-          # as release.yml's JS bundle.
         run: node apps/server/scripts/cli.ts build-exe --verbose ${{ inputs.platform == 'win' && format('--target win-{0}', inputs.arch) || '' }}
 
       - name: Import macOS signing certificate for the CLI archive
