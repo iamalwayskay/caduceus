@@ -114,7 +114,6 @@ jobs:
       release_name: ${{ steps.release_meta.outputs.name }}
       short_sha: ${{ steps.release_meta.outputs.short_sha }}
       previous_tag: ${{ steps.previous_tag.outputs.previous_tag }}
-      cli_dist_tag: ${{ steps.release_meta.outputs.cli_dist_tag }}
       is_prerelease: ${{ steps.release_meta.outputs.is_prerelease }}
       make_latest: ${{ steps.release_meta.outputs.make_latest }}
       ref: ${{ needs.resolve_commit.outputs.ref }}
@@ -157,16 +156,14 @@ jobs:
               --github-output
 
             echo "release_channel=nightly" >> "$GITHUB_OUTPUT"
-            echo "cli_dist_tag=nightly" >> "$GITHUB_OUTPUT"
             echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
             echo "make_latest=false" >> "$GITHUB_OUTPUT"
           elif [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && "${DISPATCH_CHANNEL:-preview}" == "preview" ]]; then
             # Manual-only test train: exercises the whole release flow for a
             # commit end users must never receive. Never scheduled.
             # Same versioning as nightly under its own prerelease identifier.
-            # A preview release is reachable only by asking for it: npm gets it
-            # under the `preview` dist-tag, which nothing resolves by default,
-            # its desktop builds carry no update feed, and no updater manifest
+            # A preview release is reachable only by asking for it. Its desktop
+            # builds carry no update feed, and no updater manifest
             # is attached to the release, so neither stable nor nightly
             # installs can ever be offered one.
             nightly_date="$(date -u -d "$NIGHTLY_DATE" +%Y%m%d)"
@@ -179,7 +176,6 @@ jobs:
               --github-output
 
             echo "release_channel=preview" >> "$GITHUB_OUTPUT"
-            echo "cli_dist_tag=preview" >> "$GITHUB_OUTPUT"
             echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
             echo "make_latest=false" >> "$GITHUB_OUTPUT"
           else
@@ -203,7 +199,6 @@ jobs:
             echo "version=$version" >> "$GITHUB_OUTPUT"
             echo "tag=v$version" >> "$GITHUB_OUTPUT"
             echo "name=T3 Code v$version" >> "$GITHUB_OUTPUT"
-            echo "cli_dist_tag=latest" >> "$GITHUB_OUTPUT"
             if [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
               echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
               echo "make_latest=true" >> "$GITHUB_OUTPUT"
@@ -866,7 +861,7 @@ jobs:
           > [!WARNING]
           > **This is a preview build. Do not install it unless you know exactly why you are here.**
           >
-          > Preview builds are cut by maintainers from unreleased branches to exercise the release pipeline. They can be broken, receive no fixes, are never offered as updates, and are not supported. If you want T3 Code, install the [latest release](https://github.com/pingdotgg/t3code/releases/latest) or a nightly instead.
+          > Preview builds are cut by maintainers from unreleased branches to exercise the release pipeline. They can be broken, receive no fixes, are never offered as updates, and are not supported. If you want Caduceus, install the [latest release](https://github.com/iamalwayskay/caduceus/releases/latest) or a nightly instead.
 
           Built from `${{ needs.preflight.outputs.ref }}`.
           EOF
@@ -902,49 +897,6 @@ jobs:
           fail_on_unmatched_files: true
           token: ${{ github.token }}
 
-  # The `t3` npm package is a launcher that downloads this version's CLI
-  # archive from the GitHub Release, so it publishes only once that release
-  # exists. Preview publishes too, under the `preview` dist-tag, which
-  # nothing resolves unless asked for by name.
-  publish_cli:
-    name: Publish CLI to npm
-    needs: [preflight, release]
-    if: ${{ !failure() && !cancelled() && needs.preflight.result == 'success' && needs.release.result == 'success' }}
-    runs-on: ubuntu-24.04 # blacksmith-8vcpu-ubuntu-2404
-    timeout-minutes: 15
-    permissions:
-      contents: read
-      id-token: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ needs.preflight.outputs.ref }}
-          sparse-checkout: |
-            /*
-            !/.repos/
-          sparse-checkout-cone-mode: false
-
-      - name: Setup Vite+
-        uses: voidzero-dev/setup-vp@v1
-        with:
-          node-version-file: package.json
-          cache: true
-          run-install: |
-            args:
-              - --filter=t3...
-              - --filter=@t3tools/scripts...
-
-      - name: Build the npm launcher
-        run: node scripts/build-npm-launcher.ts --version "${{ needs.preflight.outputs.version }}" --output-dir npm-packages
-
-      - name: Publish the npm launcher
-        run: |
-          if ! node apps/server/scripts/cli.ts publish --packages-dir npm-packages --tag "${{ needs.preflight.outputs.cli_dist_tag }}" --provenance --verbose; then
-            echo "::error::npm publish failed. Make sure package t3 has a trusted publisher registered for .github/workflows/release.yml (see docs/operations/release.md)." >&2
-            exit 1
-          fi
-
   publish_aur:
     name: Publish AUR package
     needs: [preflight, release]
@@ -955,16 +907,17 @@ jobs:
     secrets:
       AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
 
-  # Vercel builds the hosted web app while the desktop jobs run. `--skip-domain`
+  # Vercel builds the hosted web app only after the fork owner explicitly opts
+  # in and supplies fork-owned project/domain configuration. `--skip-domain`
   # keeps the custom domains (the channel and router domains) on the previous
   # deployment until deploy_web aliases them, after the GitHub Release. It does
   # still move the project's own *.vercel.app production hostname at build time.
   # That hostname sits behind Vercel SSO and is not a user channel, so the
-  # npm-before-client order in docs/operations/release.md holds for users.
+  # release-before-client order holds for users.
   build_web:
     name: Build hosted web app
     needs: [preflight, relay_public_config]
-    if: ${{ !cancelled() && needs.preflight.result == 'success' && needs.relay_public_config.result == 'success' && needs.preflight.outputs.release_channel != 'preview' }}
+    if: ${{ !cancelled() && needs.preflight.result == 'success' && needs.relay_public_config.result == 'success' && needs.preflight.outputs.release_channel != 'preview' && vars.CADUCEUS_DEPLOY_WEB == 'true' }}
     runs-on: blacksmith-8vcpu-ubuntu-2404
     timeout-minutes: 10
     outputs:
@@ -976,7 +929,7 @@ jobs:
       T3CODE_RELAY_URL: ${{ needs.relay_public_config.outputs.relay_url }}
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.CADUCEUS_WEB_VERCEL_PROJECT_ID }}
       T3CODE_WEB_ROUTER_URL: ${{ vars.T3CODE_WEB_ROUTER_URL }}
       VERCEL_TEAM_SLUG: ${{ vars.VERCEL_TEAM_SLUG }}
     steps:
@@ -1011,12 +964,12 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [[ -z "${VERCEL_TOKEN:-}" || -z "${VERCEL_ORG_ID:-}" || -z "${VERCEL_PROJECT_ID:-}" ]]; then
-            echo "Missing one or more required Vercel secrets: VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID." >&2
+          if [[ -z "${VERCEL_TOKEN:-}" || -z "${VERCEL_ORG_ID:-}" || -z "${VERCEL_PROJECT_ID:-}" || -z "${T3CODE_WEB_ROUTER_URL:-}" ]]; then
+            echo "Missing fork web configuration: VERCEL_TOKEN, VERCEL_ORG_ID, CADUCEUS_WEB_VERCEL_PROJECT_ID, or T3CODE_WEB_ROUTER_URL." >&2
             exit 1
           fi
 
-          router_url="${T3CODE_WEB_ROUTER_URL:-https://app.t3.codes}"
+          router_url="$T3CODE_WEB_ROUTER_URL"
           if [[ "${{ needs.preflight.outputs.release_channel }}" == "stable" ]]; then
             channel_name="latest"
           else
@@ -1052,15 +1005,15 @@ jobs:
 
   deploy_web:
     name: Deploy hosted web app
-    needs: [preflight, build_web, release, publish_cli]
-    if: ${{ !failure() && !cancelled() && needs.preflight.result == 'success' && needs.build_web.result == 'success' && needs.release.result == 'success' && needs.publish_cli.result == 'success' && needs.preflight.outputs.release_channel != 'preview' }}
+    needs: [preflight, build_web, release]
+    if: ${{ !failure() && !cancelled() && needs.preflight.result == 'success' && needs.build_web.result == 'success' && needs.release.result == 'success' && needs.preflight.outputs.release_channel != 'preview' && vars.CADUCEUS_DEPLOY_WEB == 'true' }}
     runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 10
     env:
       DEPLOYMENT_URL: ${{ needs.build_web.outputs.deployment_url }}
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.CADUCEUS_WEB_VERCEL_PROJECT_ID }}
       T3CODE_WEB_ROUTER_URL: ${{ vars.T3CODE_WEB_ROUTER_URL }}
       T3CODE_WEB_LATEST_DOMAIN: ${{ vars.T3CODE_WEB_LATEST_DOMAIN }}
       T3CODE_WEB_NIGHTLY_DOMAIN: ${{ vars.T3CODE_WEB_NIGHTLY_DOMAIN }}
@@ -1092,9 +1045,14 @@ jobs:
             exit 1
           fi
 
-          router_url="${T3CODE_WEB_ROUTER_URL:-https://app.t3.codes}"
-          latest_domain="${T3CODE_WEB_LATEST_DOMAIN:-latest.app.t3.codes}"
-          nightly_domain="${T3CODE_WEB_NIGHTLY_DOMAIN:-nightly.app.t3.codes}"
+          if [[ -z "${T3CODE_WEB_ROUTER_URL:-}" || -z "${T3CODE_WEB_LATEST_DOMAIN:-}" || -z "${T3CODE_WEB_NIGHTLY_DOMAIN:-}" ]]; then
+            echo "Missing fork web domains: T3CODE_WEB_ROUTER_URL, T3CODE_WEB_LATEST_DOMAIN, or T3CODE_WEB_NIGHTLY_DOMAIN." >&2
+            exit 1
+          fi
+
+          router_url="$T3CODE_WEB_ROUTER_URL"
+          latest_domain="$T3CODE_WEB_LATEST_DOMAIN"
+          nightly_domain="$T3CODE_WEB_NIGHTLY_DOMAIN"
           router_domain="${router_url#http://}"
           router_domain="${router_domain#https://}"
           router_domain="${router_domain%%/*}"
@@ -1121,21 +1079,20 @@ jobs:
               "${vercel_scope_args[@]}"
           fi
 
-  # Same split as the web app: build a production deployment early, then
-  # promote it to t3.codes once the release it links to exists. As above, the
-  # project's own *.vercel.app hostname moves at build time.
+  # Same split as the web app: an explicitly configured fork project builds
+  # early, then is promoted once the release it links to exists.
   build_marketing:
     name: Build marketing site
     needs: [preflight]
-    if: ${{ !cancelled() && needs.preflight.result == 'success' && needs.preflight.outputs.release_channel == 'nightly' }}
+    if: ${{ !cancelled() && needs.preflight.result == 'success' && needs.preflight.outputs.release_channel == 'nightly' && vars.CADUCEUS_DEPLOY_MARKETING == 'true' }}
     runs-on: blacksmith-8vcpu-ubuntu-2404
     timeout-minutes: 10
     outputs:
       deployment_url: ${{ steps.deploy.outputs.deployment_url }}
-      project_id: ${{ steps.deploy.outputs.project_id }}
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.CADUCEUS_MARKETING_VERCEL_PROJECT_ID }}
       VERCEL_TEAM_SLUG: ${{ vars.VERCEL_TEAM_SLUG }}
     steps:
       - name: Checkout
@@ -1162,18 +1119,10 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [[ -z "${VERCEL_TOKEN:-}" || -z "${VERCEL_ORG_ID:-}" ]]; then
-            echo "Missing one or more required Vercel secrets: VERCEL_TOKEN, VERCEL_ORG_ID." >&2
+          if [[ -z "${VERCEL_TOKEN:-}" || -z "${VERCEL_ORG_ID:-}" || -z "${VERCEL_PROJECT_ID:-}" ]]; then
+            echo "Missing fork marketing configuration: VERCEL_TOKEN, VERCEL_ORG_ID, or CADUCEUS_MARKETING_VERCEL_PROJECT_ID." >&2
             exit 1
           fi
-
-          VERCEL_PROJECT_ID="$(
-            curl --fail --silent --show-error \
-              --header "Authorization: Bearer $VERCEL_TOKEN" \
-              "https://api.vercel.com/v9/projects/t3code-marketing?teamId=$VERCEL_ORG_ID" \
-              | jq --exit-status --raw-output '.id'
-          )"
-          export VERCEL_PROJECT_ID
 
           deployment_output="$(
             vp dlx vercel@53.1.1 deploy \
@@ -1193,17 +1142,15 @@ jobs:
           fi
           echo "Staged $deployment_url."
           echo "deployment_url=$deployment_url" >> "$GITHUB_OUTPUT"
-          echo "project_id=$VERCEL_PROJECT_ID" >> "$GITHUB_OUTPUT"
 
   deploy_marketing:
     name: Deploy marketing site
     needs: [preflight, build_marketing, release]
-    if: ${{ !failure() && !cancelled() && needs.preflight.result == 'success' && needs.build_marketing.result == 'success' && needs.release.result == 'success' && needs.preflight.outputs.release_channel == 'nightly' }}
+    if: ${{ !failure() && !cancelled() && needs.preflight.result == 'success' && needs.build_marketing.result == 'success' && needs.release.result == 'success' && needs.preflight.outputs.release_channel == 'nightly' && vars.CADUCEUS_DEPLOY_MARKETING == 'true' }}
     runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 10
     env:
       DEPLOYMENT_URL: ${{ needs.build_marketing.outputs.deployment_url }}
-      VERCEL_PROJECT_ID: ${{ needs.build_marketing.outputs.project_id }}
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       VERCEL_TEAM_SLUG: ${{ vars.VERCEL_TEAM_SLUG }}
@@ -1327,7 +1274,7 @@ jobs:
       needs.preflight.outputs.release_channel != 'preview' &&
       needs.relay_public_config.result == 'success' &&
       needs.release.result == 'success' &&
-      needs.deploy_web.result == 'success' &&
+      (needs.deploy_web.result == 'success' || needs.deploy_web.result == 'skipped') &&
       (needs.finalize.result == 'success' || needs.finalize.result == 'skipped')
     needs: [preflight, relay_public_config, release, deploy_web, finalize]
     runs-on: blacksmith-8vcpu-ubuntu-2404
