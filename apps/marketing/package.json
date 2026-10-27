@@ -5,9 +5,9 @@
   "type": "module",
   "scripts": {
     "stage:install-scripts": "node scripts/stage-install-scripts.mjs",
-    "dev": "node scripts/stage-install-scripts.mjs && astro dev",
-    "build": "node scripts/stage-install-scripts.mjs && astro build",
-    "preview": "astro preview"
+    "dev": "node scripts/stage-install-scripts.mjs && cross-env ASTRO_TELEMETRY_DISABLED=1 astro dev",
+    "build": "node scripts/stage-install-scripts.mjs && cross-env ASTRO_TELEMETRY_DISABLED=1 astro build",
+    "preview": "cross-env ASTRO_TELEMETRY_DISABLED=1 astro preview"
   },
   "dependencies": {
     "@t3tools/shared": "workspace:*",
@@ -17,6 +17,7 @@
   "devDependencies": {
     "@astrojs/check": "^0.9.10",
     "@vercel/config": "^0.3.0",
+    "cross-env": "^10.1.0",
     "typescript": "~6.0.3"
   }
 }

@@ -1,8 +1,21 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { cliArchiveTarCommand, newestCliReleaseVersion, parseChecksums } from "./cliRelease.ts";
+import {
+  CLI_RELEASES_PAGE_URL,
+  cliArchiveTarCommand,
+  cliReleaseIndexPageUrl,
+  newestCliReleaseVersion,
+  parseChecksums,
+} from "./cliRelease.ts";
 
 describe("cliRelease", () => {
+  it("discovers releases from the Caduceus fork", () => {
+    expect(CLI_RELEASES_PAGE_URL).toBe("https://github.com/iamalwayskay/caduceus/releases");
+    expect(cliReleaseIndexPageUrl(2)).toBe(
+      "https://api.github.com/repos/iamalwayskay/caduceus/releases?per_page=100&page=2",
+    );
+  });
+
   it("parses sha256sum output including binary-mode markers", () => {
     const checksums = parseChecksums(
       [

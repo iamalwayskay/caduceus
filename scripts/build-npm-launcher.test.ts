@@ -136,6 +136,12 @@ it.layer(NodeServices.layer)("build-npm-launcher", (it) => {
           T3CODE_RELEASE_BASE_URL: release.baseUrl,
         };
         const launcher = path.join(packageDir, "bin/t3.mjs");
+        const launcherSource = yield* fs.readFileString(launcher);
+        assert.include(
+          launcherSource,
+          "https://github.com/iamalwayskay/caduceus/releases/download",
+        );
+        assert.notInclude(launcherSource, "https://github.com/pingdotgg/t3code/releases");
         const first = yield* run(process.execPath, [launcher, "serve", "a b"], {
           cwd: root,
           env,

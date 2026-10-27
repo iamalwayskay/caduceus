@@ -512,6 +512,9 @@ importers:
       '@vercel/config':
         specifier: ^0.3.0
         version: 0.3.0
+      cross-env:
+        specifier: ^10.1.0
+        version: 10.1.0
       typescript:
         specifier: ~6.0.3
         version: 6.0.3

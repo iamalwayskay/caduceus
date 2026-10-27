@@ -13,6 +13,12 @@ const scanTargets = [
   "apps/desktop/package.json",
   "apps/desktop/scripts",
   "apps/desktop/src",
+  "apps/marketing/astro.config.mjs",
+  "apps/marketing/package.json",
+  "apps/marketing/scripts",
+  "apps/marketing/src",
+  "apps/marketing/vercel.ts",
+  "apps/marketing/vite.config.ts",
   "apps/mobile/app.config.ts",
   "apps/mobile/package.json",
   "apps/mobile/scripts",
@@ -178,6 +184,8 @@ it("contains no outbound telemetry publishers, configuration, routes, or identit
   for (const required of [
     ".github/workflows/release.yml",
     "apps/desktop/src/app/DesktopObservability.ts",
+    "apps/marketing/astro.config.mjs",
+    "apps/marketing/package.json",
     "apps/mobile/app.config.ts",
     "apps/server/src/server.ts",
     "apps/web/src/routes/__root.tsx",
@@ -188,6 +196,16 @@ it("contains no outbound telemetry publishers, configuration, routes, or identit
     "scripts/mobile-native-client.ts",
   ]) {
     expect(relativeFiles.has(required), `source invariant did not scan ${required}`).toBe(true);
+  }
+
+  const marketingPackage = JSON.parse(
+    NodeFS.readFileSync(NodePath.join(repositoryRoot, "apps/marketing/package.json"), "utf8"),
+  ) as { readonly scripts?: Readonly<Record<string, string>> };
+  for (const script of ["dev", "build", "preview"] as const) {
+    expect(
+      marketingPackage.scripts?.[script],
+      `marketing ${script} must disable Astro telemetry`,
+    ).toMatch(/(?:^|&& )cross-env ASTRO_TELEMETRY_DISABLED=1(?: |$)/u);
   }
 
   const matches = files.flatMap((path) =>
