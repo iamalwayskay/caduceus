@@ -217,6 +217,21 @@ it("contains no outbound telemetry publishers, configuration, routes, or identit
     ).toMatch(/(?:^|&& )cross-env ASTRO_TELEMETRY_DISABLED=1(?: |$)/u);
   }
 
+  for (const [packagePath, scripts] of [
+    ["infra/relay/package.json", ["deploy", "destroy"]],
+    ["infra/task-cache/package.json", ["deploy"]],
+  ] as const) {
+    const deploymentPackage = JSON.parse(
+      NodeFS.readFileSync(NodePath.join(repositoryRoot, packagePath), "utf8"),
+    ) as { readonly scripts?: Readonly<Record<string, string>> };
+    for (const script of scripts) {
+      expect(
+        deploymentPackage.scripts?.[script],
+        `${packagePath} ${script} must disable Alchemy telemetry`,
+      ).toMatch(/^ALCHEMY_TELEMETRY_DISABLED=1 alchemy (?:deploy|destroy)(?: |$)/u);
+    }
+  }
+
   const matches = files.flatMap((path) =>
     NodeFS.readFileSync(path, "utf8")
       .split(/\r?\n/u)

@@ -6,7 +6,7 @@
     "test": "vp test run --config ../../vite.config.ts --dir .",
     "typecheck": "tsc --noEmit",
     "smoke": "node scripts/smoke.ts",
-    "deploy": "alchemy deploy --stage prod",
+    "deploy": "ALCHEMY_TELEMETRY_DISABLED=1 alchemy deploy --stage prod",
     "writers": "node scripts/manage.ts"
   },
   "dependencies": {
