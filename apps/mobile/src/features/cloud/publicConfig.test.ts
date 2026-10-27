@@ -5,7 +5,13 @@ import { resolveCloudPublicConfig } from "./publicConfig";
 vi.mock("expo-constants", () => ({
   default: {
     expoConfig: {
-      extra: {},
+      extra: {
+        observability: {
+          tracesUrl: "https://api.axiom.test/v1/traces",
+          tracesDataset: "mobile-traces",
+          tracesToken: "public-ingest-token",
+        },
+      },
     },
   },
 }));
@@ -25,10 +31,17 @@ describe("resolveCloudPublicConfig", () => {
       relay: {
         url: null,
       },
-      observability: {
-        tracesUrl: null,
-        tracesDataset: null,
-        tracesToken: null,
+    });
+  });
+
+  it("ignores legacy telemetry values from the Expo manifest", () => {
+    expect(resolveCloudPublicConfig()).toEqual({
+      clerk: {
+        publishableKey: null,
+        jwtTemplate: null,
+      },
+      relay: {
+        url: null,
       },
     });
   });
