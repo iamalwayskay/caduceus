@@ -124,7 +124,6 @@ const make = Effect.gen(function* () {
             // iOS clients are uploaded as a tarred .app, Android ones as the bare APK.
             "Content-Disposition": `attachment; filename="${key.split("/").at(-1)}.${key.startsWith("ios/") ? "tgz" : "apk"}"`,
             "X-T3-Digest": object.customMetadata?.digest ?? "",
-            "X-T3-Build-Ms": object.customMetadata?.buildMs ?? "0",
           },
         });
       }
@@ -136,13 +135,11 @@ const make = Effect.gen(function* () {
           yield* Effect.annotateCurrentSpan({ "native.result": "exists" });
           return Response.json({ exists: true });
         }
-        const buildMs = request.headers.get("x-t3-build-ms") ?? "";
         const upload = yield* r2(() =>
           bindings.CLIENTS.createMultipartUpload(key, {
             customMetadata: {
               digest,
               writer: developer!,
-              buildMs: /^\d{1,10}$/.test(buildMs) ? buildMs : "0",
             },
           }),
         );
