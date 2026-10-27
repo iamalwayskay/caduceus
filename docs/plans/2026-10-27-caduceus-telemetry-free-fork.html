@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Caduceus — telemetry-free T3 fork</title>
+    <title>Caduceus — private telemetry-free T3 fork</title>
     <style>
       :root {
         color-scheme: light dark;
@@ -137,8 +137,8 @@
           <text class="s" x="410" y="90">threads, projects, routing</text>
           <text class="s" x="410" y="112">local diagnostics only</text>
           <rect class="box" x="735" y="35" width="230" height="95" />
-          <text class="t" x="760" y="70">T3 Connect</text>
-          <text class="s" x="760" y="95">functional relay, no analytics</text>
+          <text class="t" x="760" y="70">Private SSH tunnel</text>
+          <text class="s" x="760" y="95">loopback only · Kay's SSH keys</text>
           <rect class="box" x="160" y="270" width="250" height="105" />
           <text class="t" x="185" y="305">Laptop providers</text>
           <text class="s" x="185" y="330">Hermes ACP · DSH ACP</text>
@@ -177,7 +177,8 @@ Haven:  /srv/caduceus/{app,config,data}; hardened system service runs the same c
         <p>
           Classify product analytics, OTLP export, desktop/mobile reporting and developer task
           telemetry. Preserve local trace files, resource diagnostics, provider usage accounting,
-          updates, model catalogs and T3 Connect transport.
+          updates, model catalogs and local pairing. Reject T3 cloud auth, relay and activity
+          publishing as outside the trust boundary.
         </p>
         <p>
           <strong>Checked by:</strong> a committed inventory test fails on the untouched upstream
@@ -226,15 +227,16 @@ Haven:  /srv/caduceus/{app,config,data}; hardened system service runs the same c
         <h3>5. Deploy the same commit to Haven and link both machines</h3>
         <p>
           Provision the <code>caduceus</code> workload with Haven's native workload tooling under
-          <code>/srv/caduceus</code>, run it as locked <code>svc-caduceus</code>, then use
-          <code>caduceus connect link --headless</code> on each host. No credentials are copied
-          between machines.
+          <code>/srv/caduceus</code>, run it as locked <code>svc-caduceus</code>, and keep it bound
+          to Haven loopback. A laptop user service forwards a second loopback port over the existing
+          authenticated SSH route; Caduceus registers that URL as an ordinary saved environment. T3
+          accounts, Clerk, Cloudflare relay and T3-hosted services are not involved.
         </p>
         <p>
           <strong>Checked by:</strong> Haven's complete acceptance contract (identity, ACL denial,
           unit verification/security, listeners, failure/restart/reboot, backup/restore and secret
-          scan), Connect status listing KPC and Haven, exact commit identity, and successful
-          read-only ACP turns from every installed provider.
+          scan), tunnel restart and denial tests, exact commit identity, both local HTTP health
+          endpoints, and successful read-only ACP turns from every installed provider.
         </p>
       </section>
 
@@ -249,8 +251,9 @@ Haven:  /srv/caduceus/{app,config,data}; hardened system service runs the same c
           diagnostics that remain on the machine.
         </li>
         <li>
-          <strong>Remote access:</strong> retain T3 Connect because it is functional transport, not
-          analytics; verify its requests separately.
+          <strong>Remote access:</strong> remove T3 cloud authentication, relay and publishing from
+          the product entry points. Use an SSH local forward owned by the laptop user; both servers
+          remain loopback-only.
         </li>
         <li>
           <strong>Memory:</strong> ordinary project files curated by Hermes. Git is the
@@ -264,9 +267,8 @@ Haven:  /srv/caduceus/{app,config,data}; hardened system service runs the same c
           signed Caduceus mobile build is a later deliverable.
         </li>
         <li>
-          <strong>Activity publication:</strong> keep Connect transport but disable optional
-          thread-activity publishing unless Kay later asks for mobile notifications or Live
-          Activities.
+          <strong>Activity publication:</strong> remove the T3 publishing route with the rest of the
+          hosted Connect surface.
         </li>
         <li>
           <strong>Rollout:</strong> laptop first, Haven second; the stock T3 install remains
@@ -279,8 +281,8 @@ Haven:  /srv/caduceus/{app,config,data}; hardened system service runs the same c
         <li>Reimplementing Hermes learning inside Caduceus.</li>
         <li>Copying DSH or Unsloth internals into the fork.</li>
         <li>
-          Removing update checks, provider catalogs, authentication or T3 Connect merely because
-          they use the network.
+          Removing provider authentication, local client pairing, update checks or provider catalogs
+          merely because they use the network.
         </li>
         <li>Publishing mobile-store binaries in this pass.</li>
         <li>Deleting the previous T3 runtime before the fork passes verification.</li>

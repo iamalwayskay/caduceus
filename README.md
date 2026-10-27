@@ -19,8 +19,9 @@ We wanted something performant, remote-ready, and truly open. If we ever go the 
 
 ## Installation
 
-The commands and packages below install upstream T3 Code, not Caduceus. Caduceus is currently built
-from this repository; its laptop and Haven service rollout is tracked in [STATE.md](./STATE.md).
+Caduceus is currently installed from the verified Linux CLI archive built from the
+`telemetry-free` branch. There is no public Caduceus package yet; do not use T3 Code's upstream
+installer or package feeds for this fork.
 
 > [!WARNING]
 > T3 Code currently supports Codex, Claude, Cursor, Grok Build, OpenCode, and Antigravity. Install and authenticate at least one provider before use:
@@ -35,22 +36,19 @@ from this repository; its laptop and Haven service rollout is tracked in [STATE.
 ### Command line
 
 ```bash
-curl -fsSL https://t3.codes/install.sh | sh
+git clone --branch telemetry-free https://github.com/iamalwayskay/caduceus.git
+cd caduceus
+vp install
+vp run --filter t3 build
 ```
 
-On Windows, in PowerShell:
+The deployed laptop command is `caduceus`. Runtime data lives outside the checkout. See
+[STATE.md](./STATE.md) for the verified paths, commit, providers, and Haven deployment.
 
-```powershell
-irm https://t3.codes/install.ps1 | iex
-```
+### Upstream desktop packages
 
-Then run `t3` to start the server and open the local web app. `t3 service install` keeps it running in the background, `t3 update` moves to a newer release, and `t3 --help` has the full reference.
-
-To try it once without installing, run `npx t3@latest` instead.
-
-### Desktop app
-
-Install the latest version of the desktop app from [GitHub Releases](https://github.com/pingdotgg/t3code/releases), or from your favorite package registry:
+The packages below are upstream T3 Code and are not covered by Caduceus's telemetry-free
+guarantee. They are retained only as upstream reference.
 
 #### Windows (`winget`)
 
