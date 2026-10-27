@@ -63,9 +63,9 @@ Yes. Add another provider instance in Settings and give it its own keys and endp
 
 No. T3 Code is a serious developer tool. Locally runnable models are not capable of meaningful engineering work.
 
-## Does my code go to T3 servers?
+## Does my code go to Caduceus servers?
 
-No. Your code and prompts go from your machine to your provider (Anthropic, OpenAI, etc.), not to us. With T3 Connect, traffic rides a Cloudflare tunnel (`cloudflared` on your machine). Our relay sets up the link. It does not proxy your HTTP or WebSocket sessions. T3 Code does send basic product usage events (provider, model, token totals, that kind of thing). No prompts, no file contents. That is the same on Tailscale, LAN, or T3 Connect. Set `T3CODE_TELEMETRY_ENABLED=false` if you want it off. [Product usage data](./telemetry.md)
+Your code and prompts go from your machine to the provider you choose, not to a Caduceus analytics service. Local diagnostics stay on the host unless you explicitly share their files. T3 Connect uses an authenticated relay and Cloudflare tunnel to link devices; the relay operator necessarily sees connection metadata such as account, endpoint, timing, and status information needed to operate that transport. Agent-activity publishing for notifications is separate, optional, and defaults off. [Privacy and diagnostics](./telemetry.md)
 
 ## Worktrees are eating my disk. How do I clean them up?
 

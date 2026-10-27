@@ -1,50 +1,30 @@
-# Product usage data
+# Privacy and local diagnostics
 
-The T3 Code server sends product usage events to T3 Code's own endpoint at `ingest.t3.codes`,
-associated with a hashed account or installation identifier. To count how many installations one person
-uses, the server also sends hashed account identifiers: your T3 Connect account, your OpenAI and
-Claude accounts when you are signed in, and a random identifier for each device that connects. The endpoint keeps a copy of each
-event and forwards events to PostHog. Events include the provider, model, reasoning effort,
-permission mode, turn result, duration, release channel, and main-agent token totals when
-available.
+Caduceus does not send product analytics, remote traces, build timings, or crash reports. It does
+not read provider account files to create analytics identities. Environment variables and saved
+settings cannot enable a remote observability exporter.
 
-Events do not include prompts, responses, file contents, authentication tokens, conversation IDs,
-raw provider events, or child-agent output. Child-agent token use is excluded from the totals.
+Log and NDJSON trace files remain on the machine running the environment and leave only when you
+explicitly copy or share them. Live resource diagnostics can be requested by an authenticated
+connected client and traverse that direct or Connect transport; they are not sent to a separate
+analytics or observability service. Provider usage shown in the interface is local accounting for
+the active conversation, not a Caduceus report.
 
-T3 Code also sends relay connection traces to Axiom to diagnose T3 Connect connectivity.
+## T3 Connect
 
-To disable product events and relay tracing, set `T3CODE_TELEMETRY_ENABLED=false` in the server's
-environment before starting it. Relay tracing also stops when `T3CODE_OTEL_SDK_DISABLED` or
-`OTEL_SDK_DISABLED` turns OpenTelemetry export off. The web app in a browser, including one the
-`t3` CLI opens, does not read these variables.
+T3 Connect is functional network transport, not telemetry. When you enable it, an authenticated
+relay links your account, devices, and environment through a managed tunnel. The relay operator
+necessarily receives connection metadata needed to carry and secure that traffic, including account
+and environment identifiers, endpoints, timestamps, status, and ordinary network metadata.
 
-The desktop app reads `T3CODE_TELEMETRY_ENABLED` from your shell profile (for example `~/.zshrc`) on macOS and
-Linux, so export it there and restart the app. On Windows, set it as a user environment variable.
+Publishing agent activity for push notifications and Live Activities is a separate option. It is
+off by default and can be enabled or disabled in the Connect settings.
 
-## Mobile app crash reports
+For a connection that does not use the hosted relay, use a direct LAN or Tailscale connection.
 
-When the iOS or Android app crashes or hits an error, it sends a report to T3 Code: the error
-message, the stack trace, the app version, and the device model and OS version. Each launch also
-sends startup timings, and every report carries a random ID for the install. Reports go through
-the T3 Connect relay to Axiom. They do not include your threads, prompts, or connection details,
-but an error message can quote a value the app was handling.
+## Inspect local diagnostics
 
-To stop sending them, turn off **Send crash reports** in **Settings > About T3 Code > Diagnostics**.
-
-## Export diagnostics to your own receiver
-
-To send traces, metrics, or logs to an OpenTelemetry receiver, open
-**Settings > Maintenance > Diagnostics**, select an environment, and enter each signal's OTLP HTTP
-endpoint under **OpenTelemetry export** (for example `http://localhost:4318/v1/traces`). Save, then
-restart that environment's server. The receiver must be reachable from the server's machine.
-**Test** sends an empty export from the server to check an endpoint before or after you save it;
-saved endpoints are checked when the section opens. Checks send authentication headers only to
-the signal's currently running endpoint and do not follow redirects. To check a new endpoint
-that requires authentication, save it and restart the server first.
-
-`T3CODE_OTLP_*_URL` and standard `OTEL_EXPORTER_OTLP_*` environment variables override the saved
-settings. An overridden signal shows **Set by environment** and names the variable that set it, and its
-**Test** checks the running endpoint instead of the field. For endpoints saved here or set with `T3CODE_OTLP_*_URL`, set `T3CODE_OTLP_HEADERS` for
-receivers that need authentication and `T3CODE_OTLP_PROTOCOL=http/protobuf` for receivers that do
-not accept JSON. An endpoint set with `OTEL_EXPORTER_OTLP_*` takes its headers and protocol from
-`OTEL_EXPORTER_OTLP_HEADERS` and `OTEL_EXPORTER_OTLP_PROTOCOL` instead.
+Open **Settings > Maintenance > Diagnostics** to view local logs and resource information. Server
+traces are written below the environment's data directory as NDJSON. Sharing any diagnostic file is
+an explicit user action; inspect it first because errors and command metadata can contain project
+paths or values from the work being debugged.

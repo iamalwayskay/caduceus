@@ -1,6 +1,13 @@
-# T3 Code
+# Caduceus
 
-T3 Code is an "agent harness control surface". It enables control of the agents on your machine with a best-in-class mobile app ([iOS](https://apps.apple.com/us/app/t3-code-remote-claude-more/id6787819824), [Android](https://play.google.com/store/apps/details?id=com.t3tools.t3code)), [web app](https://app.t3.codes) and [Electron-based desktop app](https://t3.codes).
+Caduceus is Kay's telemetry-free fork of [T3 Code](https://github.com/pingdotgg/t3code), an agent-harness control surface. It keeps T3 Code's local web, desktop, remote-control, provider, and ACP architecture while removing product analytics, remote observability exporters, mobile crash uploads, and build telemetry.
+
+Local diagnostic files stay on the machine unless you explicitly share them. Live resource
+diagnostics are shown only to an authenticated connected client. T3 Connect remains functional
+authenticated relay traffic; its operator can see the connection metadata required to carry that
+traffic. Agent-activity publishing is optional and defaults off.
+
+The upstream mobile-store apps are not Caduceus builds and are not covered by this fork's telemetry-free guarantee. The current deployment target is the fork's local web/server client.
 
 Works with your subscriptions on Claude Code, Codex, Cursor, Grok Build, OpenCode, and Google Antigravity. If they're set up on your computer, T3 Code can control them.
 
@@ -11,6 +18,9 @@ Nothing. We built T3 Code because we wanted the best possible development experi
 We wanted something performant, remote-ready, and truly open. If we ever go the wrong direction, we want you to have everything you need to fork and build the editor that you want.
 
 ## Installation
+
+The commands and packages below install upstream T3 Code, not Caduceus. Caduceus is currently built
+from this repository; its laptop and Haven service rollout is tracked in [STATE.md](./STATE.md).
 
 > [!WARNING]
 > T3 Code currently supports Codex, Claude, Cursor, Grok Build, OpenCode, and Antigravity. Install and authenticate at least one provider before use:

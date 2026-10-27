@@ -8,6 +8,7 @@ import {
   CONNECT_ONBOARDING_OPT_OUT_STORAGE_KEY,
   ConnectOnboardingOptOutSchema,
   EMPTY_CONNECT_ONBOARDING_OPT_OUT_STATE,
+  newConnectOnboardingSelection,
 } from "~/cloud/connectOnboarding";
 import { hasCloudPublicConfig } from "~/cloud/publicConfig";
 import { useCloudLinkController } from "~/cloud/useCloudLinkController";
@@ -71,8 +72,13 @@ function ConfiguredConnectOnboardingDialog() {
   const [requestedAccount, setRequestedAccount] = useState<string | null>(null);
   const [openForAccount, setOpenForAccount] = useState<string | null>(null);
   const [step, setStep] = useState<OnboardingStep>("devices");
-  const [exposeEnvironment, setExposeEnvironment] = useState(true);
-  const [publishAgentActivity, setPublishAgentActivity] = useState(true);
+  const initialSelection = newConnectOnboardingSelection();
+  const [exposeEnvironment, setExposeEnvironment] = useState<boolean>(
+    initialSelection.exposeEnvironment,
+  );
+  const [publishAgentActivity, setPublishAgentActivity] = useState<boolean>(
+    initialSelection.publishAgentActivity,
+  );
   const [dontShowAgain, setDontShowAgain] = useState(false);
   const [isApplying, setIsApplying] = useState(false);
   const [prefilledFromLinkState, setPrefilledFromLinkState] = useState(false);
@@ -113,8 +119,9 @@ function ConfiguredConnectOnboardingDialog() {
     } else if (sessionScopesKnown && publishStepDecided) {
       setRequestedAccount(null);
       setPrefilledFromLinkState(false);
-      setExposeEnvironment(true);
-      setPublishAgentActivity(true);
+      const selection = newConnectOnboardingSelection();
+      setExposeEnvironment(selection.exposeEnvironment);
+      setPublishAgentActivity(selection.publishAgentActivity);
       setDontShowAgain(false);
       setStep(canManageRelay && controller.linkState.target !== null ? "publish" : "devices");
       setOpenForAccount(requestedAccount);

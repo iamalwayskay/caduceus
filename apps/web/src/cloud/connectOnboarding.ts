@@ -12,3 +12,10 @@ export type ConnectOnboardingOptOutState = typeof ConnectOnboardingOptOutSchema.
 export const EMPTY_CONNECT_ONBOARDING_OPT_OUT_STATE: ConnectOnboardingOptOutState = {
   optOutAccounts: [],
 };
+
+export function newConnectOnboardingSelection() {
+  return {
+    exposeEnvironment: true,
+    publishAgentActivity: false,
+  } as const;
+}
