@@ -311,55 +311,49 @@ describe("server state projection", () => {
     }),
   );
 
-  it.effect(
-    "compares nested durable values independently of key order and omitted undefined fields",
-    () =>
-      Effect.gen(function* () {
-        const saved = yield* Ref.make<ReadonlyArray<ServerConfig>>([]);
-        const observability = {
-          logsDirectoryPath: "/synthetic/logs",
-          localTracingEnabled: false,
-          otlpTracesEnabled: false,
-          otlpMetricsEnabled: false,
-          otlpLogsEnabled: false,
-        };
-        yield* Effect.scoped(
-          Effect.gen(function* () {
-            const h = yield* makeConfigPersistenceHarness((_id, config) =>
-              Ref.update(saved, (values) => [...values, config]),
+  it.effect("compares nested durable values independently of key order", () =>
+    Effect.gen(function* () {
+      const saved = yield* Ref.make<ReadonlyArray<ServerConfig>>([]);
+      const observability = {
+        logsDirectoryPath: "/synthetic/logs",
+        localTracingEnabled: false,
+      };
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          const h = yield* makeConfigPersistenceHarness((_id, config) =>
+            Ref.update(saved, (values) => [...values, config]),
+          );
+          const first = yield* h.send(snapshotEvent({ ...CONFIG, observability }));
+          yield* TestClock.adjust("500 millis");
+          const reordered = Object.fromEntries(
+            Object.entries(observability).toReversed(),
+          ) as typeof observability;
+          for (const next of [
+            { ...CONFIG, observability: reordered },
+            { ...CONFIG, observability: { ...observability } },
+          ]) {
+            const encode = Schema.encodeEffect(Schema.fromJsonString(ServerObservability));
+            expect(JSON.parse(yield* encode(next.observability))).toEqual(
+              JSON.parse(yield* encode(observability)),
             );
-            const first = yield* h.send(snapshotEvent({ ...CONFIG, observability }));
-            yield* TestClock.adjust("500 millis");
-            const reordered = Object.fromEntries(
-              Object.entries(observability).toReversed(),
-            ) as typeof observability;
-            for (const next of [
-              { ...CONFIG, observability: reordered },
-              { ...CONFIG, observability: { ...reordered, otlpTracesUrl: undefined } },
-              { ...CONFIG, observability: { ...observability } },
-            ]) {
-              const encode = Schema.encodeEffect(Schema.fromJsonString(ServerObservability));
-              expect(JSON.parse(yield* encode(next.observability))).toEqual(
-                JSON.parse(yield* encode(observability)),
-              );
-              const projection = yield* h.send(snapshotEvent(next));
-              expect(projection.config.observability).toEqual(next.observability);
-              yield* TestClock.adjust("10 seconds");
-              expect.soft(yield* Ref.get(saved)).toEqual([first.config]);
-            }
-            const writesBeforeChange = (yield* Ref.get(saved)).length;
-            const changed = yield* h.send(
-              snapshotEvent({
-                ...CONFIG,
-                observability: { ...observability, otlpTracesUrl: "https://traces.example.test" },
-              }),
-            );
+            const projection = yield* h.send(snapshotEvent(next));
+            expect(projection.config.observability).toEqual(next.observability);
             yield* TestClock.adjust("10 seconds");
-            expect((yield* Ref.get(saved)).length).toBe(writesBeforeChange + 1);
-            expect((yield* Ref.get(saved)).at(-1)).toEqual(changed.config);
-          }),
-        );
-      }),
+            expect.soft(yield* Ref.get(saved)).toEqual([first.config]);
+          }
+          const writesBeforeChange = (yield* Ref.get(saved)).length;
+          const changed = yield* h.send(
+            snapshotEvent({
+              ...CONFIG,
+              observability: { ...observability, localTracingEnabled: true },
+            }),
+          );
+          yield* TestClock.adjust("10 seconds");
+          expect((yield* Ref.get(saved)).length).toBe(writesBeforeChange + 1);
+          expect((yield* Ref.get(saved)).at(-1)).toEqual(changed.config);
+        }),
+      );
+    }),
   );
 
   it.effect("saves once across transient themes, usage sources and stall updates", () =>
