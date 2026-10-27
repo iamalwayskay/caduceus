@@ -253,6 +253,48 @@ it.effect("does not expose a telemetry collector route", () => {
   );
 });
 
+it.effect("authenticates installer credentials without entering cache admission", () =>
+  Effect.gen(function* () {
+    const cache = yield* Cache.Cache;
+    const context = { waitUntil: () => {} };
+    const valid = yield* cache.handle(
+      new Request("https://cache.example/projects/t3code/auth", {
+        method: "POST",
+        headers: {
+          authorization: `Basic ${btoa("julius:fixture-token-012345678901234567890123456789")}`,
+        },
+      }),
+      context,
+    );
+    expect(valid.status).toBe(204);
+    const invalid = yield* cache.handle(
+      new Request("https://cache.example/projects/t3code/auth", {
+        method: "POST",
+        headers: {
+          authorization: `Basic ${btoa("julius:wrong-token-that-is-long-enough-0123456789")}`,
+        },
+      }),
+      context,
+    );
+    expect(invalid.status).toBe(403);
+  }).pipe(
+    Effect.provide(
+      Cache.layer.pipe(
+        Layer.provide([
+          Layer.succeed(Cache.Bindings, {
+            developerKeys: JSON.stringify({
+              julius: "210eb3d2c67a7207923e1999751300a87a2dd22839b258b80c3d805a6fe64984",
+            }),
+          } as Cache.Bindings["Service"]),
+          Layer.succeed(Admission.Admission, {
+            withPermit: () => Effect.die("Credential probe reached cache admission"),
+          }),
+        ]),
+      ),
+    ),
+  ),
+);
+
 it.effect("keeps artifacts private and limits CI reader credentials to reads", () =>
   Effect.gen(function* () {
     const cache = yield* Cache.Cache;

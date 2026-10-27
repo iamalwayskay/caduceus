@@ -77,7 +77,9 @@ const make = Effect.gen(function* () {
   const handle = Effect.fn("TaskCache.handle")(
     function* (request: Request, context: Pick<Cloudflare.ExecutionContext, "waitUntil">) {
       const url = new URL(request.url);
-      const route = /^\/projects\/t3code\/(fetch|store|blob\/([0-9a-f-]{36}))$/.exec(url.pathname);
+      const route = /^\/projects\/t3code\/(auth|fetch|store|blob\/([0-9a-f-]{36}))$/.exec(
+        url.pathname,
+      );
       const operation = route?.[1] ?? "unknown";
       const writing = operation === "store";
       yield* Effect.annotateCurrentSpan({
@@ -93,6 +95,11 @@ const make = Effect.gen(function* () {
       if (!request.headers.has("authorization"))
         return yield* new CacheError({ status: 401, reason: "missing_identity" });
       const developer = yield* developerIdentity(request, bindings.developerKeys);
+      if (operation === "auth") {
+        if (typeof developer !== "string")
+          return yield* new CacheError({ status: 403, reason: "invalid_identity" });
+        return new Response(null, { status: 204 });
+      }
       if (writing) {
         if (developer === null)
           return yield* new CacheError({ status: 403, reason: "invalid_identity" });

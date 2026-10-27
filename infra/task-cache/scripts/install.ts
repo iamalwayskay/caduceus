@@ -1,5 +1,6 @@
 // @effect-diagnostics nodeBuiltinImport:off - standalone bootstrap also runs before dependencies are installed.
 // @effect-diagnostics globalConsole:off - interactive setup.
+// @effect-diagnostics globalFetch:off - bootstrap validates credentials before dependencies exist.
 import * as NodeCrypto from "node:crypto";
 import * as NodeFSP from "node:fs/promises";
 import * as NodeOS from "node:os";
@@ -154,6 +155,16 @@ if (
     "Use an HTTPS cache endpoint without embedded credentials, query, or fragment (HTTP is only allowed on loopback).",
   );
 endpoint = url.href.replace(/\/$/, "");
+const response = await fetch(`${endpoint}/auth`, {
+  method: "POST",
+  headers: {
+    Authorization: `Basic ${Buffer.from(`${name}:${token}`).toString("base64")}`,
+  },
+  signal: AbortSignal.timeout(10_000),
+});
+await response.body?.cancel();
+if (response.status !== 204)
+  throw new Error(`Credential verification failed (${response.status}); nothing was installed.`);
 const candidates = [NodePath.join(root, "node_modules/vite-plus/dist/bin.js")];
 for (const directory of [
   process.env.VITE_PLUS_HOME,

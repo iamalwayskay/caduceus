@@ -142,13 +142,18 @@ it("uses one machine hook across fresh worktrees without modifying Vite+", async
   }
 });
 
-it("installs credentials without a network probe and never prints the token", async () => {
+it("verifies credentials without mutation and never prints the token", async () => {
   const home = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "task-cache-setup-"));
   const token = "private-credential-that-must-not-appear-in-output";
   let requests = 0;
-  const server = NodeHttp.createServer((_request, response) => {
+  const server = NodeHttp.createServer((request, response) => {
     requests++;
-    response.writeHead(401).end();
+    expect(request.method).toBe("POST");
+    expect(request.url).toBe("/projects/test/auth");
+    expect(request.headers.authorization).toBe(
+      `Basic ${Buffer.from(`maria:${token}`).toString("base64")}`,
+    );
+    response.writeHead(204).end();
   });
   try {
     await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -180,7 +185,7 @@ it("installs credentials without a network probe and never prints the token", as
       child.once("close", (code) => resolve({ code, output }));
     });
     expect(result.code).toBe(0);
-    expect(requests).toBe(0);
+    expect(requests).toBe(1);
     expect(result.output).not.toContain(token);
     expect(
       JSON.parse(
@@ -192,6 +197,61 @@ it("installs credentials without a network probe and never prints the token", as
     ).toEqual({
       [`http://127.0.0.1:${address.port}/projects/test`]: { name: "maria", token },
     });
+  } finally {
+    await new Promise<void>((resolve, reject) =>
+      server.close((error) => (error ? reject(error) : resolve())),
+    );
+    await NodeFSP.rm(home, { recursive: true, force: true });
+  }
+});
+
+it("rejects invalid credentials before changing the installation", async () => {
+  const home = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "task-cache-setup-invalid-"));
+  const token = "invalid-credential-that-must-not-appear-in-output";
+  let requests = 0;
+  const server = NodeHttp.createServer((_request, response) => {
+    requests++;
+    response.writeHead(403).end();
+  });
+  try {
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("Missing HTTP address");
+    const result = await new Promise<{ code: number | null; output: string }>((resolve, reject) => {
+      const child = NodeChildProcess.spawn(
+        process.execPath,
+        [NodePath.join(import.meta.dirname, "../scripts/install.ts"), "--non-interactive"],
+        {
+          env: {
+            ...process.env,
+            HOME: home,
+            T3_CACHE_SETUP_URL: `http://127.0.0.1:${address.port}/projects/test`,
+            T3_CACHE_SETUP_NAME: "maria",
+            T3_CACHE_SETUP_TOKEN: token,
+          },
+          stdio: ["ignore", "pipe", "pipe"],
+        },
+      );
+      let output = "";
+      child.stdout.on("data", (chunk) => {
+        output += chunk;
+      });
+      child.stderr.on("data", (chunk) => {
+        output += chunk;
+      });
+      child.once("error", reject);
+      child.once("close", (code) => resolve({ code, output }));
+    });
+    expect(result.code).not.toBe(0);
+    expect(requests).toBe(1);
+    expect(result.output).toContain("Credential verification failed (403)");
+    expect(result.output).not.toContain(token);
+    await expect(
+      NodeFSP.stat(NodePath.join(home, ".config/t3-task-cache/credentials.json")),
+    ).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(
+      NodeFSP.stat(NodePath.join(home, ".local/share/t3-task-cache")),
+    ).rejects.toMatchObject({ code: "ENOENT" });
   } finally {
     await new Promise<void>((resolve, reject) =>
       server.close((error) => (error ? reject(error) : resolve())),
