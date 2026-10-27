@@ -194,6 +194,21 @@ const stageRuntimeExternals = Effect.fn("stageRuntimeExternals")(function* (inpu
     "vp install --prod (cli archive runtime externals)",
   );
 
+  // Undici publishes its generated llhttp parsers, but a hoisted production install can omit
+  // that generated directory. The standalone CLI's fetch path needs it for Connect and updates.
+  const undiciLlhttpSource = path.join(
+    input.repoRoot,
+    "apps/server/node_modules/undici/lib/llhttp",
+  );
+  const undiciLlhttpTarget = path.join(input.stageDir, "node_modules/undici/lib/llhttp");
+  yield* fs.makeDirectory(undiciLlhttpTarget, { recursive: true });
+  for (const file of ["llhttp-wasm.js", "llhttp_simd-wasm.js"] as const) {
+    const source = path.join(undiciLlhttpSource, file);
+    const target = path.join(undiciLlhttpTarget, file);
+    yield* requireInput(source, "Run vp install before building the CLI archive.");
+    if (!(yield* fs.exists(target))) yield* fs.copy(source, target);
+  }
+
   const platformKey = cliArchivePlatformKey(input.platform, input.arch);
   const prebuildsDir = path.join(input.stageDir, "node_modules/node-pty/prebuilds");
   const foreignPrebuilds = (yield* fs
