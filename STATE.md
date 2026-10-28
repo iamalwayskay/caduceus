@@ -23,9 +23,11 @@ Hermes curates and learns from those files. No custom memory MCP exists or is ne
   `/home/kay/Code/AI/apps/caduceus/release/Caduceus-0.1.3-x86_64.AppImage`, with its application-menu
   entry at `~/.local/share/applications/caduceus.desktop`. It uses
   `/home/kay/Code/AI/data/caduceus`, opens the primary Caduceus repository on `main`, and serves its
-  bundled backend on `0.0.0.0:3773` while the app is open. The registered projects are the real Git
-  repositories Caduceus, OpenUsage, Voicebox, llama.cpp, and NInfer; `/home/kay/Code/AI` itself is
-  not registered because it is a container directory rather than a repository. UFW restricts
+  bundled backend on `0.0.0.0:3773` while the app is open. Fifty projects are registered: the
+  top-level repositories under `~/Code`, the five AI repositories, the active brand workspaces,
+  Mirius, and the existing imported workspaces. The legacy `/home/kay/Code/AI` entry remains only
+  because it owns one imported thread and the non-destructive project removal correctly refused to
+  delete that history. UFW restricts
   non-loopback access to the home LAN and WireGuard. The former standalone user service is disabled to prevent two
   processes from owning the same state directory. The CLI launcher remains
   `/home/kay/.local/bin/caduceus`. The installed
