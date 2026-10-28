@@ -22,14 +22,20 @@ Hermes curates and learns from those files. No custom memory MCP exists or is ne
 - KPC has the native Caduceus AppImage installed inside the fork at
   `/home/kay/Code/AI/apps/caduceus/release/Caduceus-0.1.3-x86_64.AppImage`, with its application-menu
   entry at `~/.local/share/applications/caduceus.desktop`. It uses
-  `/home/kay/Code/AI/data/caduceus` and serves its bundled backend on `127.0.0.1:3773` while the app
-  is open. The former standalone user service is disabled to prevent two processes from owning the
-  same state directory. The CLI launcher remains `/home/kay/.local/bin/caduceus`. The installed
+  `/home/kay/Code/AI/data/caduceus`, opens `/home/kay/Code/AI` as its sole active project, and serves
+  its bundled backend on `0.0.0.0:3773` while the app is open. UFW restricts non-loopback access to
+  the home LAN and WireGuard. The former standalone user service is disabled to prevent two
+  processes from owning the same state directory. The CLI launcher remains
+  `/home/kay/.local/bin/caduceus`. The installed
   AppImage SHA-256 is `934cf79411041715771f6b7ef404cdc519d976e30b48edb82f46823f7b57e573`.
-- Codex, Hermes ACP, and DeepSeek Harness ACP are enabled. Hermes uses its own imported OpenAI Codex
-  session with `gpt-6.1-sol`; DeepSeek Harness reports `deepseek-v4-flash`. Claude is installed but
-  not authenticated. A separate `Hermes Local · Qwen3.8` ACP instance uses KPC's Ollama service at
-  `127.0.0.1:11434`, preserving frontier Hermes as a separate choice.
+- Codex, Hermes ACP, and DeepSeek Harness ACP are enabled. Generic Hermes keeps its imported OpenAI
+  Codex session and frontier model picker. Three safe-mode Hermes instances pin every installed
+  local Ollama model: `qwen3.8:latest`, `qwen3:4b-instruct-2507-q4_K_M`, and
+  `decider-2b:latest`; the Ollama `qwen3.5:cloud` pointer is correctly not labelled local. DSH ACP
+  exposes one universal 112-model picker: local Qwen 3.8 and Decider 2B, 74 Venice models, and 36
+  OpenCode Go models. DSH defaults to local Qwen 3.8. Venice is injected only into the DSH child by
+  Thalamus; OpenCode Go uses DSH's protected credential reference. Claude is installed but not
+  authenticated.
 - Haven runs `caduceus.service` as locked account `svc-caduceus`, binds only
   `127.0.0.1:3773`, and can write only `/srv/caduceus/data`. Its unit permits `AF_NETLINK` because
   Node's `os.networkInterfaces()` needs it for direct-environment configuration.
@@ -41,6 +47,9 @@ Hermes curates and learns from those files. No custom memory MCP exists or is ne
   uses one-time local tokens and no hosted relay.
 - The `upstream` remote fetches only `upstream/main`; 2,148 unrelated upstream branch refs were
   removed so the app's branch picker no longer resembles a list of extra checkouts.
+- The Caduceus source checkout and its `telemetry-free` development worktree are no longer app
+  projects, so the composer does not default to the fork branch. The checkout/branch controls remain
+  unchanged and operate on whichever project Kay selects.
 - The release smoke test, runtime endpoint scan, missing-`connect` CLI check, both loopback listener
   checks, HTTP health, service restart, restricted-key denial, and legacy Connect-state scan passed.
   Retired Connect keys and cloudflared binaries are preserved under

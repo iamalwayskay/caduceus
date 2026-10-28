@@ -3,9 +3,9 @@
 Caduceus is Kay's telemetry-free fork of [T3 Code](https://github.com/pingdotgg/t3code), an agent-harness control surface. It keeps T3 Code's local web, desktop, remote-control, provider, and ACP architecture while removing product analytics, remote observability exporters, mobile crash uploads, and build telemetry.
 
 Local diagnostic files stay on the machine unless you explicitly share them. Live resource
-diagnostics are shown only to an authenticated connected client. T3 Connect remains functional
-authenticated relay traffic; its operator can see the connection metadata required to carry that
-traffic. Agent-activity publishing is optional and defaults off.
+diagnostics are shown only to an authenticated connected client. T3 Connect, Clerk, hosted relay
+transport, managed cloudflared, and agent-activity publishing are removed; direct pairing and saved
+environments remain local.
 
 The upstream mobile-store apps are not Caduceus builds and are not covered by this fork's telemetry-free guarantee. The current deployment target is the fork's local web/server client.
 
@@ -61,7 +61,9 @@ The installed application is **Caduceus** at
 `T3CODE_HOME=/home/kay/Code/AI/data/caduceus`, so the app uses the same Codex, Hermes, DeepSeek
 Harness, projects, and saved Haven environment as the CLI deployment. It advertises KPC at
 `192.168.1.185:3773` for authenticated clients on the home LAN; WireGuard clients can use
-`10.77.0.2:3773`.
+`10.77.0.2:3773`. The launcher opens `/home/kay/Code/AI` as the project root, not this fork's build
+worktree. Provider choices include Hermes/OpenAI, three fixed local Ollama routes, and DSH's shared
+112-model catalog: local Qwen/Decider, 74 Venice models, and 36 OpenCode Go models.
 
 ### Upstream desktop packages
 
