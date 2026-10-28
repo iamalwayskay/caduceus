@@ -19,9 +19,13 @@ Hermes curates and learns from those files. No custom memory MCP exists or is ne
 
 - Commit `b32b01407c` is deployed on the laptop and Haven. The Linux x64 archive SHA-256 is
   `7f5e2152c39fb653563787156deafa83bee27ad288dd96fd4e8a9ca6442ca15a`.
-- The laptop launcher is `/home/kay/.local/bin/caduceus`; state is
-  `/home/kay/Code/AI/data/caduceus`. Its user service is enabled and serves the local app on port
-  `127.0.0.1:3773`. The upstream stock runtime remains preserved but stopped.
+- KPC has the native Caduceus AppImage installed inside the fork at
+  `/home/kay/Code/AI/apps/caduceus/release/Caduceus-0.1.3-x86_64.AppImage`, with its application-menu
+  entry at `~/.local/share/applications/caduceus.desktop`. It uses
+  `/home/kay/Code/AI/data/caduceus` and serves its bundled backend on `127.0.0.1:3773` while the app
+  is open. The former standalone user service is disabled to prevent two processes from owning the
+  same state directory. The CLI launcher remains `/home/kay/.local/bin/caduceus`. The installed
+  AppImage SHA-256 is `934cf79411041715771f6b7ef404cdc519d976e30b48edb82f46823f7b57e573`.
 - Codex, Hermes ACP, and DeepSeek Harness ACP are enabled. Hermes uses its own imported OpenAI Codex
   session with `gpt-6.1-sol`; DeepSeek Harness reports `deepseek-v4-flash`. Claude is installed but
   not authenticated.
@@ -45,5 +49,5 @@ Hermes curates and learns from those files. No custom memory MCP exists or is ne
 ## Trap
 
 The upstream App Store and Play Store clients are not Caduceus builds and are not covered by this
-fork's telemetry-free guarantee. This rollout uses the fork's local web/server client until a signed
-Caduceus mobile build is produced and verified.
+fork's telemetry-free guarantee. The installed KPC desktop package and local web/server client are
+Caduceus builds; a signed Caduceus mobile build remains a separate deliverable.

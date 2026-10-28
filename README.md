@@ -19,9 +19,9 @@ We wanted something performant, remote-ready, and truly open. If we ever go the 
 
 ## Installation
 
-Caduceus is currently installed from the verified Linux CLI archive built from the
-`telemetry-free` branch. There is no public Caduceus package yet; do not use T3 Code's upstream
-installer or package feeds for this fork.
+Caduceus is currently installed from verified Linux desktop and CLI artifacts built from the
+`telemetry-free` branch. There is no public Caduceus package feed yet; do not use T3 Code's
+upstream installer or package feeds for this fork.
 
 > [!WARNING]
 > T3 Code currently supports Codex, Claude, Cursor, Grok Build, OpenCode, and Antigravity. Install and authenticate at least one provider before use:
@@ -42,8 +42,24 @@ vp install
 vp run --filter t3 build
 ```
 
-The deployed laptop command is `caduceus`. Runtime data lives outside the checkout. See
+The deployed KPC command is `caduceus`. Runtime data lives outside the checkout. See
 [STATE.md](./STATE.md) for the verified paths, commit, providers, and Haven deployment.
+
+### Linux desktop app
+
+```bash
+node scripts/build-desktop-artifact.ts --platform linux --target AppImage --arch x64 \
+  --output-dir release-caduceus-desktop-package
+install -Dm755 release-caduceus-desktop-package/Caduceus-*-x86_64.AppImage \
+  /home/kay/Code/AI/apps/caduceus/release/Caduceus-0.1.3-x86_64.AppImage
+install -Dm644 apps/desktop/resources/linux/caduceus-kpc.desktop \
+  ~/.local/share/applications/caduceus.desktop
+```
+
+The installed application is **Caduceus** at
+`/home/kay/Code/AI/apps/caduceus/release/Caduceus-0.1.3-x86_64.AppImage`. KPC's desktop entry sets
+`T3CODE_HOME=/home/kay/Code/AI/data/caduceus`, so the app uses the same Codex, Hermes, DeepSeek
+Harness, projects, and saved Haven environment as the CLI deployment.
 
 ### Upstream desktop packages
 
