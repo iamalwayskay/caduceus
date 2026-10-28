@@ -28,7 +28,7 @@ Hermes curates and learns from those files. No custom memory MCP exists or is ne
   non-loopback access to the home LAN and WireGuard. The former standalone user service is disabled to prevent two
   processes from owning the same state directory. The CLI launcher remains
   `/home/kay/.local/bin/caduceus`. The installed
-  AppImage SHA-256 is `49eb1f3dd833619f0768b2bd819bd62dcf24543ac40041fb2c0e4148116508c0`.
+  AppImage SHA-256 is `47b7fc308753ff3a354d13763d596de445e7f049d8eb002b365d243f04de10ad`.
 - Codex, Hermes ACP, and DeepSeek Harness ACP are enabled. Generic Hermes keeps its imported OpenAI
   Codex session and frontier model picker. Three safe-mode Hermes instances pin every installed
   local Ollama model: `qwen3.8:latest`, `qwen3:4b-instruct-2507-q4_K_M`, and
@@ -63,6 +63,9 @@ Hermes curates and learns from those files. No custom memory MCP exists or is ne
   contain their threads, matching Kay's GPT navigation instead of hiding projects in a filter.
 - `t3 thread rename <thread> <title>` renames imported or native threads through the authenticated
   local MCP session; the imported GPT threads have concise subject titles instead of raw prompts.
+- `t3 thread import <project>` imports recent Claude and Codex history through the authenticated
+  local MCP session. An explicitly registered home project may import `/home/kay` sessions, while
+  automatic project discovery continues to exclude the home directory.
 - The release smoke test, runtime endpoint scan, missing-`connect` CLI check, both loopback listener
   checks, HTTP health, service restart, restricted-key denial, and legacy Connect-state scan passed.
   Retired Connect keys and cloudflared binaries are preserved under

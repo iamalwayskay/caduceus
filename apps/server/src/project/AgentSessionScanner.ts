@@ -1308,7 +1308,21 @@ export const make = Effect.gen(function* () {
   ) {
     const root = path.resolve(expandHomePath(workspaceRoot, homeDir));
     const realRoot = yield* fileSystem.realPath(root).pipe(Effect.orElseSucceed(() => root));
-    if (isExcludedProjectPath(root) || isExcludedProjectPath(realRoot)) return Stream.empty;
+    const explicitHomeProject =
+      normalizeProjectPathForComparison(root) ===
+        normalizeProjectPathForComparison(path.resolve(homeDir)) &&
+      normalizeProjectPathForComparison(realRoot) ===
+        normalizeProjectPathForComparison(path.resolve(homeDir));
+    const projectlessRecoveryRoot = path.resolve(homeDir, "Documents", "Codex");
+    const matchesSelectedProject = Effect.fn(function* (candidatePath: string) {
+      const resolved = path.resolve(candidatePath);
+      if ((yield* directoryIdentity(resolved)) === rootIdentity) return true;
+      if (!explicitHomeProject) return false;
+      const relative = path.relative(projectlessRecoveryRoot, resolved);
+      return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+    });
+    if (!explicitHomeProject && (isExcludedProjectPath(root) || isExcludedProjectPath(realRoot)))
+      return Stream.empty;
     const rootIdentity = yield* directoryIdentity(root);
     const nowMs = DateTime.toEpochMillis(yield* DateTime.now);
     const cutoffMs = nowMs - RECENT_THREAD_WINDOW_MS;
@@ -1324,7 +1338,7 @@ export const make = Effect.gen(function* () {
       const expanded = expandHomePath(candidate.cwd.trim(), homeDir);
       if (!path.isAbsolute(expanded)) continue;
       const resolved = path.resolve(expanded);
-      if ((yield* directoryIdentity(resolved)) !== rootIdentity) continue;
+      if (!(yield* matchesSelectedProject(resolved))) continue;
 
       for (const transcript of candidate.transcripts) {
         if (
@@ -1411,10 +1425,7 @@ export const make = Effect.gen(function* () {
             return Option.some<AgentSessionRecentThread>({ _tag: "Skipped" });
           }
           const expandedCwd = expandHomePath(snapshot.cwd.value.trim(), homeDir);
-          if (
-            !path.isAbsolute(expandedCwd) ||
-            (yield* directoryIdentity(path.resolve(expandedCwd))) !== rootIdentity
-          ) {
+          if (!path.isAbsolute(expandedCwd) || !(yield* matchesSelectedProject(expandedCwd))) {
             return Option.some<AgentSessionRecentThread>({ _tag: "Skipped" });
           }
 

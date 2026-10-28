@@ -4,6 +4,7 @@ import {
   OrchestratorMcpThreadReadResult,
   OrchestratorMcpThreadSendResult,
   OrchestratorMcpThreadWaitResult,
+  AgentSessionImportResult,
   ProjectId,
   RunId,
   ThreadMetadataMcpUpdateResult,
@@ -509,6 +510,18 @@ export const renameThread = Effect.fn("cli.thread.renameThread")(function* (
   );
 });
 
+export const importProjectSessions = Effect.fn("cli.thread.importProjectSessions")(function* (
+  tools: ThreadTools,
+  projectId: ProjectId,
+  workspaceRoot: string,
+) {
+  return yield* tools.call(
+    "t3_project_import_sessions",
+    { projectId, expectedWorkspaceRoot: workspaceRoot },
+    AgentSessionImportResult,
+  );
+});
+
 const threadListCommand = Command.make("list", {
   ...projectLocationFlags,
   project: Flag.String("project").pipe(
@@ -540,6 +553,28 @@ const threadListCommand = Command.make("list", {
         for (const thread of threads) {
           yield* Console.log(`${thread.threadId}  ${thread.status.padEnd(11)}  ${thread.title}`);
         }
+      }),
+    ).pipe(reportThreadErrors),
+  ),
+);
+
+const threadImportCommand = Command.make("import", {
+  ...projectLocationFlags,
+  project: Argument.String("project").pipe(
+    Argument.withDescription("Project id or a path inside the project, such as ."),
+  ),
+  json: jsonFlag,
+}).pipe(
+  Command.withDescription("Import recent Claude and Codex sessions for a project."),
+  Command.withHandler((flags) =>
+    withThreadTools(
+      flags,
+      Effect.fn("cli.thread.import")(function* (tools) {
+        const project = yield* resolveProject(tools, flags.project);
+        const result = yield* importProjectSessions(tools, project.id, project.workspaceRoot);
+        yield* flags.json
+          ? printJson(result)
+          : Console.log(`Imported ${result.importedCount}; skipped ${result.skippedCount}.`);
       }),
     ).pipe(reportThreadErrors),
   ),
@@ -740,6 +775,7 @@ export const threadCommand = Command.make("thread").pipe(
   Command.withDescription("Start, message, and read threads on the running server."),
   Command.withSubcommands([
     threadListCommand,
+    threadImportCommand,
     threadStartCommand,
     threadSendCommand,
     threadRenameCommand,

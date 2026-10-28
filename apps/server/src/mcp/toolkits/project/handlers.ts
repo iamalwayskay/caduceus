@@ -7,6 +7,7 @@ import * as ThreadMessageIntake from "../../../orchestration-v2/ThreadMessageInt
 import * as Claims from "../../../orchestration-v2/AttachmentClaims.ts";
 import * as Project from "../../../project/ProjectService.ts";
 import * as ManagedProjectFolders from "../../../project/ManagedProjectFolders.ts";
+import * as AgentSessionImporter from "../../../project/AgentSessionImporter.ts";
 import * as Repositories from "../../../sourceControl/SourceControlRepositoryService.ts";
 import * as GitVcsDriver from "../../../vcs/GitVcsDriver.ts";
 import * as ServerSettings from "../../../serverSettings.ts";
@@ -227,6 +228,15 @@ export const layer = McpToolAccess.toLayer(ProjectToolkit, {
         });
       return result.value;
     }),
+  ),
+  t3_project_import_sessions: McpToolAccess.writesEnvironment((input) =>
+    AgentSessionImporter.AgentSessionImporter.pipe(
+      Effect.flatMap((importer) => importer.importRecentAgentThreads(input)),
+      Effect.mapError(
+        (error) =>
+          new OrchestratorMcpFailure({ code: "orchestration_error", message: error.message }),
+      ),
+    ),
   ),
   t3_project_create: McpToolAccess.writesEnvironment(({ workspaceRoot, ...input }) =>
     Effect.gen(function* () {

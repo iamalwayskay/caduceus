@@ -16,6 +16,8 @@ import {
   OrchestratorMcpFailure,
   SourceControlCloneRepositoryInput,
   SourceControlCloneRepositoryResult,
+  AgentSessionImportInput,
+  AgentSessionImportResult,
 } from "@t3tools/contracts";
 import * as FileSystem from "effect/FileSystem";
 import * as DocumentText from "../../../provider/DocumentText.ts";
@@ -31,6 +33,7 @@ import * as ThreadManagementService from "../../../orchestration-v2/ThreadManage
 import * as SourceControlRepositoryService from "../../../sourceControl/SourceControlRepositoryService.ts";
 import * as GitVcsDriver from "../../../vcs/GitVcsDriver.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
+import * as AgentSessionImporter from "../../../project/AgentSessionImporter.ts";
 
 const shared = {
   success: Project,
@@ -84,6 +87,13 @@ const ProjectDeleteTool = Tool.make("t3_project_delete", {
   ...shared,
   description: "Delete one project. Nonempty needs `force: true`. Folder on disk stays.",
   parameters: Schema.Struct({ projectId: ProjectId, force: Schema.optionalKey(Schema.Boolean) }),
+}).annotate(Tool.Destructive, true);
+const ProjectImportSessionsTool = Tool.make("t3_project_import_sessions", {
+  ...shared,
+  description: "Import recent Claude and Codex sessions whose workspace is this project.",
+  parameters: AgentSessionImportInput,
+  success: AgentSessionImportResult,
+  dependencies: [...shared.dependencies, AgentSessionImporter.AgentSessionImporter],
 }).annotate(Tool.Destructive, true);
 const ProjectCloneTool = Tool.make("t3_project_clone", {
   ...shared,
@@ -156,5 +166,6 @@ export const ProjectToolkit = Toolkit.make(
   ProjectCreateTool,
   ProjectUpdateTool,
   ProjectDeleteTool,
+  ProjectImportSessionsTool,
   ProjectCloneTool,
 );

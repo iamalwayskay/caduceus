@@ -2,7 +2,7 @@ import { assert, it } from "@effect/vitest";
 import { RunId, ThreadId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 
-import { renameThread, type ThreadTools, waitForRun } from "./thread.ts";
+import { importProjectSessions, renameThread, type ThreadTools, waitForRun } from "./thread.ts";
 
 const threadId = ThreadId.make("thread-1");
 const runId = RunId.make("run-1");
@@ -93,6 +93,26 @@ it.effect("rename updates thread metadata through the authenticated MCP session"
       {
         tool: "t3_thread_update",
         args: { threadId, action: "rename", title: "Useful title" },
+      },
+    ]);
+  }),
+);
+
+it.effect("import requests recent sessions for the resolved project", () =>
+  Effect.gen(function* () {
+    const projectId = "project-1" as never;
+    const { tools, calls } = scriptedTools({
+      t3_project_import_sessions: [{ importedCount: 13, skippedCount: 0 }],
+    });
+
+    assert.deepStrictEqual(yield* importProjectSessions(tools, projectId, "/home/kay"), {
+      importedCount: 13,
+      skippedCount: 0,
+    });
+    assert.deepStrictEqual(calls, [
+      {
+        tool: "t3_project_import_sessions",
+        args: { projectId, expectedWorkspaceRoot: "/home/kay" },
       },
     ]);
   }),
