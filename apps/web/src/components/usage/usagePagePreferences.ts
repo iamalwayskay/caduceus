@@ -3,7 +3,7 @@ import * as Schema from "effect/Schema";
 
 import { getLocalStorageItem, setLocalStorageItem } from "../../hooks/useLocalStorage";
 
-const STORAGE_KEY = "t3code:usage-page-preferences:v1";
+const STORAGE_KEY = "t3code:usage-page-preferences:v2";
 const UsagePagePreferencesSchema = Schema.Struct({
   metric: Schema.Literals(["cost", "tokens", "limits"]),
   windowDays: Schema.Literals([1, 7, 30, 90]),
@@ -11,7 +11,7 @@ const UsagePagePreferencesSchema = Schema.Struct({
 });
 export type UsagePagePreferences = typeof UsagePagePreferencesSchema.Type;
 
-const DEFAULT_PREFERENCES: UsagePagePreferences = { metric: "limits", windowDays: 30 };
+const DEFAULT_PREFERENCES: UsagePagePreferences = { metric: "tokens", windowDays: 30 };
 
 export function readUsagePagePreferences(): UsagePagePreferences {
   try {

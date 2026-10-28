@@ -3,7 +3,7 @@ Name=Caduceus
 GenericName=AI Agent Harness
 Comment=Private desktop application for Codex, Hermes, and DeepSeek Harness
 Exec=/usr/bin/env T3CODE_HOME=/home/kay/Code/AI/data/caduceus T3CODE_DESKTOP_LAN_HOST=192.168.1.185 /home/kay/Code/AI/apps/caduceus/release/Caduceus-0.1.3-x86_64.AppImage --ozone-platform=wayland %U
-Path=/home/kay/Code/AI
+Path=/home/kay/Code/AI/apps/caduceus
 Terminal=false
 Type=Application
 Icon=caduceus

@@ -22,12 +22,14 @@ Hermes curates and learns from those files. No custom memory MCP exists or is ne
 - KPC has the native Caduceus AppImage installed inside the fork at
   `/home/kay/Code/AI/apps/caduceus/release/Caduceus-0.1.3-x86_64.AppImage`, with its application-menu
   entry at `~/.local/share/applications/caduceus.desktop`. It uses
-  `/home/kay/Code/AI/data/caduceus`, opens `/home/kay/Code/AI` as its sole active project, and serves
-  its bundled backend on `0.0.0.0:3773` while the app is open. UFW restricts non-loopback access to
-  the home LAN and WireGuard. The former standalone user service is disabled to prevent two
+  `/home/kay/Code/AI/data/caduceus`, opens the primary Caduceus repository on `main`, and serves its
+  bundled backend on `0.0.0.0:3773` while the app is open. The registered projects are the real Git
+  repositories Caduceus, OpenUsage, Voicebox, llama.cpp, and NInfer; `/home/kay/Code/AI` itself is
+  not registered because it is a container directory rather than a repository. UFW restricts
+  non-loopback access to the home LAN and WireGuard. The former standalone user service is disabled to prevent two
   processes from owning the same state directory. The CLI launcher remains
   `/home/kay/.local/bin/caduceus`. The installed
-  AppImage SHA-256 is `934cf79411041715771f6b7ef404cdc519d976e30b48edb82f46823f7b57e573`.
+  AppImage SHA-256 is `1d0e23043390df7f720281ff334d28b9ea6925f25ce9e49dc52ab0a6b41fd483`.
 - Codex, Hermes ACP, and DeepSeek Harness ACP are enabled. Generic Hermes keeps its imported OpenAI
   Codex session and frontier model picker. Three safe-mode Hermes instances pin every installed
   local Ollama model: `qwen3.8:latest`, `qwen3:4b-instruct-2507-q4_K_M`, and
@@ -47,9 +49,15 @@ Hermes curates and learns from those files. No custom memory MCP exists or is ne
   uses one-time local tokens and no hosted relay.
 - The `upstream` remote fetches only `upstream/main`; 2,148 unrelated upstream branch refs were
   removed so the app's branch picker no longer resembles a list of extra checkouts.
-- The Caduceus source checkout and its `telemetry-free` development worktree are no longer app
-  projects, so the composer does not default to the fork branch. The checkout/branch controls remain
+- The `telemetry-free` development worktree is no longer an app project. The primary Caduceus
+  checkout on `main` is registered instead, so the composer does not default to the fork branch or
+  ask to initialize Git for the non-repository AI container. The checkout/branch controls remain
   unchanged and operate on whichever project Kay selects.
+- Desktop activation now targets the primary Caduceus checkout rather than the last imported empty
+  draft. The Usage page defaults to token usage instead of cost or provider limits, because local
+  Hermes/DSH models have transcript tokens but no subscription-limit window and may be unpriced.
+- Codex uses the explicit desktop-safe executable path `/usr/lib/chatgpt/resources/codex`; provider
+  health reports ready with eight models even when the graphical launcher has a restricted PATH.
 - The release smoke test, runtime endpoint scan, missing-`connect` CLI check, both loopback listener
   checks, HTTP health, service restart, restricted-key denial, and legacy Connect-state scan passed.
   Retired Connect keys and cloudflared binaries are preserved under
