@@ -565,7 +565,7 @@ const threadImportCommand = Command.make("import", {
   ),
   json: jsonFlag,
 }).pipe(
-  Command.withDescription("Import recent Claude and Codex sessions for a project."),
+  Command.withDescription("Import saved Claude and Codex sessions for a project."),
   Command.withHandler((flags) =>
     withThreadTools(
       flags,

@@ -1,5 +1,6 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as NodeOS from "node:os";
+import { zstdCompressSync } from "node:zlib";
 import { describe, expect, it } from "@effect/vitest";
 import {
   AgentSessionImportSource,
@@ -116,6 +117,21 @@ const writeTranscript = Effect.fn("AgentSessionScanner.test.writeTranscript")(fu
   const seconds = input.mtimeMs / 1000;
   yield* fileSystem.utimes(input.filePath, seconds, seconds);
 });
+
+const writeCompressedTranscript = Effect.fn("AgentSessionScanner.test.writeCompressedTranscript")(
+  function* (input: {
+    readonly filePath: string;
+    readonly contents: string;
+    readonly mtimeMs: number;
+  }) {
+    const fileSystem = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    yield* fileSystem.makeDirectory(path.dirname(input.filePath), { recursive: true });
+    yield* fileSystem.writeFile(input.filePath, zstdCompressSync(Buffer.from(input.contents)));
+    const seconds = input.mtimeMs / 1000;
+    yield* fileSystem.utimes(input.filePath, seconds, seconds);
+  },
+);
 
 const claudeSessionLine = (cwd: string) =>
   `${JSON.stringify({ type: "user", cwd, sessionId: "s1" })}\n${JSON.stringify({ type: "assistant" })}\n`;
@@ -1018,7 +1034,7 @@ it.layer(NodeServices.layer)("AgentSessionScanner", (it) => {
       }),
     );
 
-    it.effect("imports recent Claude and Codex sessions for the selected project only", () =>
+    it.effect("imports all saved Claude and Codex sessions for the selected project only", () =>
       Effect.gen(function* () {
         const path = yield* Path.Path;
         const nowMs = Date.parse("2026-08-24T12:00:00.000Z");
@@ -1098,11 +1114,77 @@ it.layer(NodeServices.layer)("AgentSessionScanner", (it) => {
         expect(threads.map((thread) => thread.providerSessionId)).toEqual([
           "codex-recent",
           "claude-recent",
+          "claude-old",
         ]);
         expect(threads.map((thread) => thread.messages.map((message) => message.text))).toEqual([
           ["Review this code", "Looks good"],
           ["Fix the project", "Done"],
+          ["Fix the project", "Done"],
         ]);
+      }),
+    );
+
+    it.effect("imports plain and compressed Codex archived sessions", () =>
+      Effect.gen(function* () {
+        const path = yield* Path.Path;
+        const nowMs = Date.parse("2026-08-24T12:00:00.000Z");
+        const claudeHomePath = yield* makeTempDir("t3code-claude-home-");
+        const codexHomePath = yield* makeTempDir("t3code-codex-home-");
+        const workspace = yield* makeTempDir("t3code-workspace-");
+        const contents = (id: string, prompt: string) =>
+          [
+            encodeTranscriptRecord({ type: "session_meta", payload: { id, cwd: workspace } }),
+            encodeTranscriptRecord({
+              type: "event_msg",
+              payload: { type: "user_message", message: prompt },
+            }),
+          ].join("\n");
+
+        yield* writeTranscript({
+          filePath: path.join(codexHomePath, "archived_sessions", "rollout-plain.jsonl"),
+          contents: contents("archived-plain", "Plain archive"),
+          mtimeMs: nowMs - 60_000,
+        });
+        yield* writeCompressedTranscript({
+          filePath: path.join(codexHomePath, "archived_sessions", "rollout-compressed.jsonl.zst"),
+          contents: contents("archived-compressed", "Compressed archive"),
+          mtimeMs: nowMs,
+        });
+
+        const threads = yield* runRecentThreads({
+          claudeHomePath,
+          codexHomePath,
+          workspaceRoot: workspace,
+        });
+
+        expect(threads.map((thread) => thread.providerSessionId)).toEqual([
+          "archived-compressed",
+          "archived-plain",
+        ]);
+      }),
+    );
+
+    it.effect("skips a corrupt compressed Codex archive without failing the import", () =>
+      Effect.gen(function* () {
+        const path = yield* Path.Path;
+        const nowMs = Date.parse("2026-08-24T12:00:00.000Z");
+        const claudeHomePath = yield* makeTempDir("t3code-claude-home-");
+        const codexHomePath = yield* makeTempDir("t3code-codex-home-");
+        const workspace = yield* makeTempDir("t3code-workspace-");
+
+        yield* writeTranscript({
+          filePath: path.join(codexHomePath, "archived_sessions", "rollout-corrupt.jsonl.zst"),
+          contents: "not a zstd stream",
+          mtimeMs: nowMs,
+        });
+
+        const outcomes = yield* runRecentThreadOutcomes({
+          claudeHomePath,
+          codexHomePath,
+          workspaceRoot: workspace,
+        });
+
+        expect(outcomes).toEqual([]);
       }),
     );
 

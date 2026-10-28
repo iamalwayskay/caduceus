@@ -1,4 +1,8 @@
+// @effect-diagnostics nodeBuiltinImport:off -- Node's native streaming zstd decoder is the archive-format adapter; Effect has no zstd stream API.
 import * as NodeOS from "node:os";
+import { createReadStream } from "node:fs";
+import { open as openNodeFile, stat as statNodeFile, type FileHandle } from "node:fs/promises";
+import { createZstdDecompress } from "node:zlib";
 
 import {
   AgentSessionScanError,
@@ -52,14 +56,14 @@ const MAX_METADATA_BYTES_PER_SOURCE = 64 * 1024 * 1024;
 const MAX_METADATA_OPERATIONS_PER_SOURCE = MAX_TRANSCRIPTS_PER_SOURCE * 4;
 const MAX_METADATA_RECORDS_PER_SOURCE = 100_000;
 const MAX_METADATA_RECORDS_PER_TRANSCRIPT = 1_000;
-const RECENT_THREAD_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 // Screenshot-heavy transcripts can reach GiB; select fields while streaming to avoid allocating payloads.
 const MAX_IMPORTED_TRANSCRIPT_BYTES = 4 * 1024 * 1024 * 1024;
 const MAX_IMPORTED_MESSAGES = 200;
 const MAX_IMPORT_HISTORY_BYTES = 32 * 1024 * 1024;
-const MAX_IMPORT_BYTES = 4 * 1024 * 1024 * 1024;
-const MAX_IMPORT_TRANSCRIPTS = 100;
-const MAX_IMPORT_RECORDS = 100_000;
+const MAX_IMPORT_BYTES = 8 * 1024 * 1024 * 1024;
+const MAX_IMPORT_TRANSCRIPTS = MAX_TRANSCRIPTS_PER_SOURCE;
+const MAX_IMPORTED_RECORDS_PER_TRANSCRIPT = 100_000;
+const MAX_IMPORT_RECORDS = 2_000_000;
 
 const TranscriptContentBlock = Schema.Struct({
   type: Schema.optional(Schema.String),
@@ -291,9 +295,9 @@ export function parseAgentSessionTranscript(
   input: AgentSessionTranscriptMetadata & {
     readonly contents: string;
   },
-  lines = splitTranscriptRecords(input.contents, MAX_IMPORT_RECORDS + 1),
+  lines = splitTranscriptRecords(input.contents, MAX_IMPORTED_RECORDS_PER_TRANSCRIPT + 1),
 ): AgentSessionThread | null {
-  if (lines.length > MAX_IMPORT_RECORDS) return null;
+  if (lines.length > MAX_IMPORTED_RECORDS_PER_TRANSCRIPT) return null;
   const records = lines.flatMap((line) => Option.toArray(decodeTranscriptRecord(line)));
   const claudeFields =
     input.source === "claudeAgent"
@@ -663,6 +667,33 @@ export const make = Effect.gen(function* () {
   const statOption = (target: string) =>
     fileSystem.stat(target).pipe(Effect.asSome, Effect.orElseSucceed(Option.none));
 
+  const transcriptChunks = async function* (file: FileHandle, chunkSize: number) {
+    const input = createReadStream("", { fd: file.fd, autoClose: false, highWaterMark: chunkSize });
+    const stream = input.pipe(createZstdDecompress());
+    for await (const value of stream) {
+      const chunk = value instanceof Uint8Array ? value : Buffer.from(value);
+      for (let offset = 0; offset < chunk.byteLength; offset += chunkSize) {
+        yield chunk.subarray(offset, Math.min(offset + chunkSize, chunk.byteLength));
+      }
+    }
+  };
+
+  const nodeTranscriptIdentity = (
+    filePath: string,
+    stats: Awaited<ReturnType<FileHandle["stat"]>>,
+  ) =>
+    ({
+      filePath,
+      size: Number(stats.size),
+      mtimeMs: stats.mtime.getTime(),
+      device: Number(stats.dev),
+      inode: String(stats.ino),
+      birthtimeMs: stats.birthtime.getTime(),
+    }) satisfies TranscriptIdentity;
+
+  const sameNodeTranscriptIdentity = (expected: TranscriptIdentity, actual: TranscriptIdentity) =>
+    sameTranscriptIdentity({ ...expected, birthtimeMs: actual.birthtimeMs }, actual);
+
   const directoryIdentity = Effect.fn("AgentSessionScanner.directoryIdentity")(function* (
     target: string,
     knownStats?: FileSystem.File.Info,
@@ -722,11 +753,192 @@ export const make = Effect.gen(function* () {
     } as const;
   });
 
+  const readCompressedCwd = Effect.fn("AgentSessionScanner.readCompressedCwd")(function* (
+    source: AgentSessionSource,
+    transcript: TranscriptCandidate,
+    budget: MetadataReadBudget,
+  ) {
+    if (transcript.size === 0) return null;
+    if (
+      budget.bytesRemaining === 0 ||
+      budget.operationsRemaining < 2 ||
+      budget.recordsRemaining === 0
+    ) {
+      budget.truncated = true;
+      return null;
+    }
+    budget.operationsRemaining -= 1;
+    return yield* Effect.tryPromise(async () => {
+      const file = await openNodeFile(transcript.filePath, "r");
+      try {
+        const decoder = new TextDecoder();
+        let remaining = "";
+        let bytesRead = 0;
+        let recordsRead = 0;
+        const maxBytes = MAX_TRANSCRIPT_SCAN_BYTES;
+        const reserveRecord = () => {
+          if (
+            recordsRead === MAX_METADATA_RECORDS_PER_TRANSCRIPT ||
+            budget.recordsRemaining === 0
+          ) {
+            budget.truncated = true;
+            return false;
+          }
+          recordsRead += 1;
+          budget.recordsRemaining -= 1;
+          return true;
+        };
+        const readLastRecord = () => {
+          const record = remaining + decoder.decode();
+          return record.length === 0 || !reserveRecord() ? null : extractCwd(record.trim(), source);
+        };
+
+        for await (const chunk of transcriptChunks(file, METADATA_READ_BYTES)) {
+          if (bytesRead >= maxBytes) break;
+          if (budget.bytesRemaining === 0 || budget.operationsRemaining === 0) {
+            budget.truncated = true;
+            return null;
+          }
+          const readSize = Math.min(
+            METADATA_READ_BYTES,
+            maxBytes - bytesRead,
+            budget.bytesRemaining,
+          );
+          budget.operationsRemaining -= 1;
+          budget.bytesRemaining -= readSize;
+          const next = chunk.subarray(0, readSize);
+          bytesRead += next.byteLength;
+          remaining += decoder.decode(next, { stream: true });
+          const lines = remaining.split("\n");
+          remaining = lines.pop() ?? "";
+
+          for (const line of lines) {
+            if (!reserveRecord()) return null;
+            const cwd = extractCwd(line.trim(), source);
+            if (cwd !== null) return cwd;
+          }
+        }
+        return readLastRecord();
+      } finally {
+        await file.close();
+      }
+    }).pipe(Effect.orElseSucceed(() => null));
+  });
+
+  const readCompressedTranscript = Effect.fn("AgentSessionScanner.readCompressedTranscript")(
+    function* (
+      filePath: string,
+      expected: ReturnType<typeof transcriptIdentity>,
+      recordLimit: number,
+      source: AgentSessionSource,
+      byteLimit: number,
+    ) {
+      if (expected.size > MAX_IMPORTED_TRANSCRIPT_BYTES) return null;
+
+      return yield* Effect.tryPromise(async () => {
+        const file = await openNodeFile(filePath, "r");
+        try {
+          if (
+            !sameNodeTranscriptIdentity(
+              expected,
+              nodeTranscriptIdentity(filePath, await file.stat()),
+            )
+          ) {
+            return null;
+          }
+          const records: Array<DecodedTranscriptRecord> = [];
+          let cwd = Option.none<string>();
+          let claudeFields = emptyClaudeFields;
+          let historyBytes = 0;
+          let recordBytes = 0;
+          let recordCount = 0;
+          let bytesRead = 0;
+          const reserve = (bytes: number) => {
+            recordBytes += bytes;
+            if (historyBytes + recordBytes > MAX_IMPORT_HISTORY_BYTES) {
+              throw new TranscriptJsonLimitError(
+                "Transcript selected history exceeds the 32 MiB memory budget",
+              );
+            }
+          };
+          let reader = createTranscriptJsonReader(reserve, selectTranscriptPath);
+          let decoder = new TextDecoder();
+          let recordStarted = false;
+
+          const finishRecord = () => {
+            reader.write(decoder.decode());
+            recordCount += 1;
+            if (recordCount > recordLimit) return false;
+            const decoded = decodeTranscriptValue(reader.finish());
+            if (Option.isSome(decoded)) {
+              if (Option.isNone(cwd)) cwd = Option.fromNullOr(extractDecodedCwd(decoded.value));
+              if (source === "claudeAgent") {
+                claudeFields = foldClaudeFields(claudeFields, decoded.value);
+              }
+              if (shouldRetainDecodedRecord(source, decoded.value)) {
+                records.push(decoded.value);
+                historyBytes += recordBytes;
+              }
+            }
+            recordBytes = 0;
+            reader = createTranscriptJsonReader(reserve, selectTranscriptPath);
+            decoder = new TextDecoder();
+            recordStarted = false;
+            return true;
+          };
+
+          for await (const next of transcriptChunks(file, TRANSCRIPT_PREFIX_BYTES)) {
+            bytesRead += next.byteLength;
+            if (bytesRead > Math.min(MAX_IMPORTED_TRANSCRIPT_BYTES, byteLimit)) return null;
+            const withinBudget = (() => {
+              let start = 0;
+              while (start < next.byteLength) {
+                const newline = next.indexOf(10, start);
+                const end = newline === -1 ? next.byteLength : newline;
+                recordStarted = true;
+                reader.write(decoder.decode(next.subarray(start, end), { stream: true }));
+                if (newline === -1) break;
+                if (!finishRecord()) return false;
+                start = newline + 1;
+              }
+              return true;
+            })();
+            if (!withinBudget) return null;
+          }
+
+          if (recordStarted && !finishRecord()) return null;
+          const descriptorMatches = sameNodeTranscriptIdentity(
+            expected,
+            nodeTranscriptIdentity(filePath, await file.stat()),
+          );
+          const pathMatches = sameNodeTranscriptIdentity(
+            expected,
+            nodeTranscriptIdentity(filePath, await statNodeFile(filePath)),
+          );
+          return descriptorMatches && pathMatches
+            ? { records, recordCount, cwd, claudeFields, bytesRead }
+            : null;
+        } finally {
+          await file.close();
+        }
+      }).pipe(
+        Effect.catch((cause) =>
+          Effect.logWarning("Could not read imported transcript", { filePath, cause }).pipe(
+            Effect.as(null),
+          ),
+        ),
+      );
+    },
+  );
+
   const readCwd = Effect.fn("AgentSessionScanner.readCwd")(function* (
     source: AgentSessionSource,
     transcript: TranscriptCandidate,
     budget: MetadataReadBudget,
   ) {
+    if (transcript.filePath.endsWith(".zst")) {
+      return yield* readCompressedCwd(source, transcript, budget);
+    }
     if (transcript.size === 0) return null;
     if (
       budget.bytesRemaining === 0 ||
@@ -778,22 +990,17 @@ export const make = Effect.gen(function* () {
               budget.operationsRemaining -= 1;
               budget.bytesRemaining -= readSize;
               const next = yield* file.readAlloc(readSize);
-              if (Option.isNone(next)) {
-                return readLastRecord();
-              }
-
+              if (Option.isNone(next)) return readLastRecord();
               bytesRead += next.value.byteLength;
               remaining += decoder.decode(next.value, { stream: true });
               const lines = remaining.split("\n");
               remaining = lines.pop() ?? "";
-
               for (const line of lines) {
                 if (!reserveRecord()) return null;
                 const cwd = extractCwd(line.trim(), source);
                 if (cwd !== null) return cwd;
               }
             }
-
             if (bytesRead < transcript.size) {
               budget.truncated = true;
               return null;
@@ -810,9 +1017,12 @@ export const make = Effect.gen(function* () {
     expected: ReturnType<typeof transcriptIdentity>,
     recordLimit: number,
     source: AgentSessionSource,
+    byteLimit = MAX_IMPORTED_TRANSCRIPT_BYTES,
   ) {
+    if (filePath.endsWith(".zst")) {
+      return yield* readCompressedTranscript(filePath, expected, recordLimit, source, byteLimit);
+    }
     if (expected.size > MAX_IMPORTED_TRANSCRIPT_BYTES) return null;
-
     return yield* Effect.scoped(
       fileSystem.open(filePath, { flag: "r" }).pipe(
         Effect.flatMap((file) =>
@@ -838,7 +1048,6 @@ export const make = Effect.gen(function* () {
             let reader = createTranscriptJsonReader(reserve, selectTranscriptPath);
             let decoder = new TextDecoder();
             let recordStarted = false;
-
             const finishRecord = () => {
               reader.write(decoder.decode());
               recordCount += 1;
@@ -860,15 +1069,11 @@ export const make = Effect.gen(function* () {
               recordStarted = false;
               return true;
             };
-
             while (bytesRead < expected.size) {
               const next = yield* file.readAlloc(
                 Math.min(TRANSCRIPT_PREFIX_BYTES, expected.size - bytesRead),
               );
-              if (Option.isNone(next)) {
-                return null;
-              }
-
+              if (Option.isNone(next)) return null;
               bytesRead += next.value.byteLength;
               const withinBudget = yield* Effect.try(() => {
                 let start = 0;
@@ -885,10 +1090,9 @@ export const make = Effect.gen(function* () {
               });
               if (!withinBudget) return null;
             }
-
             if (recordStarted && !(yield* Effect.try(finishRecord))) return null;
             return sameTranscriptIdentity(expected, transcriptIdentity(filePath, yield* file.stat))
-              ? { records, recordCount, cwd, claudeFields }
+              ? { records, recordCount, cwd, claudeFields, bytesRead }
               : null;
           }),
         ),
@@ -969,6 +1173,7 @@ export const make = Effect.gen(function* () {
   const discoverCodexTranscripts = Effect.fn("AgentSessionScanner.discoverCodexTranscripts")(
     function* (homePath: string, providerInstanceId: ProviderInstanceId, operationBudget: number) {
       const sessionsDir = path.join(homePath, "sessions");
+      const archivedSessionsDir = path.join(homePath, "archived_sessions");
 
       const transcripts: Array<TranscriptCandidate> = [];
       let operationsRemaining = operationBudget;
@@ -1024,6 +1229,29 @@ export const make = Effect.gen(function* () {
               }
             }
           }
+        }
+      }
+      for (const entry of (yield* readDirectory(archivedSessionsDir)).toSorted().toReversed()) {
+        if (!entry.startsWith("rollout-")) continue;
+        if (!entry.endsWith(".jsonl") && !entry.endsWith(".jsonl.zst")) continue;
+        if (operationsRemaining <= 0) {
+          truncated = true;
+          break;
+        }
+        const filePath = path.join(archivedSessionsDir, entry);
+        operationsRemaining -= 1;
+        const stats = yield* statOption(filePath);
+        if (
+          Option.isSome(stats) &&
+          stats.value.type === "File" &&
+          Option.isSome(stats.value.mtime)
+        ) {
+          transcripts.push({
+            filePath,
+            mtimeMs: stats.value.mtime.value.getTime(),
+            providerInstanceId,
+            size: Number(stats.value.size),
+          });
         }
       }
       return { transcripts, truncated };
@@ -1324,9 +1552,6 @@ export const make = Effect.gen(function* () {
     if (!explicitHomeProject && (isExcludedProjectPath(root) || isExcludedProjectPath(realRoot)))
       return Stream.empty;
     const rootIdentity = yield* directoryIdentity(root);
-    const nowMs = DateTime.toEpochMillis(yield* DateTime.now);
-    const cutoffMs = nowMs - RECENT_THREAD_WINDOW_MS;
-
     const candidates = cachedCandidates ?? (yield* collectCandidates()).candidates;
     cachedCandidates = candidates;
 
@@ -1341,13 +1566,7 @@ export const make = Effect.gen(function* () {
       if (!(yield* matchesSelectedProject(resolved))) continue;
 
       for (const transcript of candidate.transcripts) {
-        if (
-          transcript.mtimeMs === null ||
-          transcript.mtimeMs < cutoffMs ||
-          transcript.mtimeMs > nowMs
-        ) {
-          continue;
-        }
+        if (transcript.mtimeMs === null) continue;
         eligibleTranscripts.push({
           candidate,
           transcript: { ...transcript, mtimeMs: transcript.mtimeMs },
@@ -1400,25 +1619,28 @@ export const make = Effect.gen(function* () {
               source: completedSource,
             });
           }
+          const compressed = transcript.filePath.endsWith(".zst");
           if (
             transcriptsRemaining === 0 ||
             recordsRemaining === 0 ||
             identity.size > MAX_IMPORTED_TRANSCRIPT_BYTES ||
-            identity.size > bytesRemaining
+            (!compressed && identity.size > bytesRemaining)
           ) {
             return Option.some<AgentSessionRecentThread>({ _tag: "Skipped" });
           }
           transcriptsRemaining -= 1;
-          bytesRemaining -= identity.size;
+          if (!compressed) bytesRemaining -= identity.size;
           const snapshot = yield* readTranscript(
             transcript.filePath,
             identity,
-            recordsRemaining,
+            Math.min(recordsRemaining, MAX_IMPORTED_RECORDS_PER_TRANSCRIPT),
             candidate.source,
+            bytesRemaining,
           );
           if (snapshot === null) {
             return Option.some<AgentSessionRecentThread>({ _tag: "Skipped" });
           }
+          if (compressed) bytesRemaining -= snapshot.bytesRead;
           recordsRemaining -= snapshot.recordCount;
 
           if (Option.isNone(snapshot.cwd)) {
@@ -1433,7 +1655,9 @@ export const make = Effect.gen(function* () {
             {
               source: candidate.source,
               providerInstanceId: candidate.providerInstanceId,
-              fallbackSessionId: path.basename(transcript.filePath, ".jsonl"),
+              fallbackSessionId: path
+                .basename(transcript.filePath)
+                .replace(/\.jsonl(?:\.zst)?$/, ""),
               lastActiveAtMs: transcript.mtimeMs,
             },
             snapshot.records,

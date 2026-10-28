@@ -44,6 +44,9 @@ vp run --filter t3 build
 
 The deployed KPC command is `caduceus`. Runtime data lives outside the checkout. See
 [STATE.md](./STATE.md) for the verified paths, commit, providers, and Haven deployment.
+`caduceus thread import <project>` imports the project's saved Claude and Codex session history
+within bounded safety limits, including Codex's plain and zstd-compressed archives; it does not
+discard sessions merely because they are older than 30 days.
 
 ### Linux desktop app
 

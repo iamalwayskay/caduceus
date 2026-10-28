@@ -28,7 +28,7 @@ Hermes curates and learns from those files. No custom memory MCP exists or is ne
   non-loopback access to the home LAN and WireGuard. The former standalone user service is disabled to prevent two
   processes from owning the same state directory. The CLI launcher remains
   `/home/kay/.local/bin/caduceus`. The installed
-  AppImage SHA-256 is `e77c226761da5591ffc68c7860c77d41a7221eb8aa21ca909bdb770fe01748b5`.
+  AppImage SHA-256 is `548c34827ed9deb55e36864308c47df4dd61154ae653efa2bf8d47ea5f198073`.
 - Codex and DeepSeek Harness ACP are enabled. Hermes remains installed for its recursive-learning
   application, but its duplicate provider instances are hidden from the model picker. DSH's
   112-model catalog appears as three provider groups: local Qwen 3.8 and Decider 2B, 74 Venice
@@ -61,9 +61,13 @@ Hermes curates and learns from those files. No custom memory MCP exists or is ne
   contain their threads, matching Kay's GPT navigation instead of hiding projects in a filter.
 - `t3 thread rename <thread> <title>` renames imported or native threads through the authenticated
   local MCP session; the imported GPT threads have concise subject titles instead of raw prompts.
-- `t3 thread import <project>` imports recent Claude and Codex history through the authenticated
-  local MCP session. An explicitly registered home project may import `/home/kay` sessions, while
-  automatic project discovery continues to exclude the home directory.
+- `t3 thread import <project>` imports all saved Claude and Codex history through the authenticated
+  local MCP session, including sessions older than 30 days and Codex's `.jsonl.zst` archives. An
+  explicitly registered home project may import `/home/kay` sessions, while automatic discovery
+  still excludes the home directory.
+- Projectless now lists 119 ordinary conversations. Archived threads and review subagents remain
+  outside that sidebar count. The completed source ledger includes 38 compressed Codex archive
+  files; malformed or over-limit transcripts are skipped without aborting the import.
 - The release smoke test, runtime endpoint scan, missing-`connect` CLI check, both loopback listener
   checks, HTTP health, service restart, restricted-key denial, and legacy Connect-state scan passed.
   Retired Connect keys and cloudflared binaries are preserved under
