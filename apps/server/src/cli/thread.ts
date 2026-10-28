@@ -6,6 +6,7 @@ import {
   OrchestratorMcpThreadWaitResult,
   ProjectId,
   RunId,
+  ThreadMetadataMcpUpdateResult,
   ThreadId,
   TrimmedNonEmptyString,
   type OrchestratorMcpThreadListItem,
@@ -496,6 +497,18 @@ const decodeThreadId = (value: string) =>
     Effect.mapError(() => new ThreadUsageError({ detail: `'${value}' is not a thread id.` })),
   );
 
+export const renameThread = Effect.fn("cli.thread.renameThread")(function* (
+  tools: ThreadTools,
+  threadId: ThreadId,
+  title: string,
+) {
+  return yield* tools.call(
+    "t3_thread_update",
+    { threadId, action: "rename", title },
+    ThreadMetadataMcpUpdateResult,
+  );
+});
+
 const threadListCommand = Command.make("list", {
   ...projectLocationFlags,
   project: Flag.String("project").pipe(
@@ -645,6 +658,30 @@ const threadSendCommand = Command.make("send", {
   ),
 );
 
+const threadRenameCommand = Command.make("rename", {
+  ...projectLocationFlags,
+  thread: threadArgument,
+  title: Argument.String("title").pipe(Argument.withDescription("New thread title.")),
+  json: jsonFlag,
+}).pipe(
+  Command.withDescription("Rename a thread."),
+  Command.withHandler((flags) =>
+    Effect.gen(function* () {
+      const threadId = yield* decodeThreadId(flags.thread);
+      const title = yield* decodeTitle(flags.title).pipe(
+        Effect.mapError(() => new ThreadUsageError({ detail: "The title is empty." })),
+      );
+      yield* withThreadTools(
+        flags,
+        Effect.fn("cli.thread.rename")(function* (tools) {
+          const renamed = yield* renameThread(tools, threadId, title);
+          yield* flags.json ? printJson(renamed) : Console.log(renamed.title);
+        }),
+      );
+    }).pipe(reportThreadErrors),
+  ),
+);
+
 const threadShowCommand = Command.make("show", {
   ...projectLocationFlags,
   thread: threadArgument,
@@ -705,6 +742,7 @@ export const threadCommand = Command.make("thread").pipe(
     threadListCommand,
     threadStartCommand,
     threadSendCommand,
+    threadRenameCommand,
     threadShowCommand,
   ]),
 );

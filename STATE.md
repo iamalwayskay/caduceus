@@ -24,12 +24,11 @@ Hermes curates and learns from those files. No custom memory MCP exists or is ne
   entry at `~/.local/share/applications/caduceus.desktop`. It uses
   `/home/kay/Code/AI/data/caduceus`, opens the primary Caduceus repository on `main`, and serves its
   bundled backend on `0.0.0.0:3773` while the app is open. Its project tree mirrors Kay's GPT
-  sidebar: Mirius, Mirieth, AI, Thalamus, Lutristy, and Ivorae; Projectless is the built-in
-  unassigned-thread section. UFW restricts
+  sidebar: Mirius, Mirieth, Projectless (`/home/kay`), AI, Thalamus, Lutristy, and Ivorae. UFW restricts
   non-loopback access to the home LAN and WireGuard. The former standalone user service is disabled to prevent two
   processes from owning the same state directory. The CLI launcher remains
   `/home/kay/.local/bin/caduceus`. The installed
-  AppImage SHA-256 is `a65553f1cdeccfcd0a10fd7b33924485bb852ee4f29b8834166b1fc9058f1748`.
+  AppImage SHA-256 is `49eb1f3dd833619f0768b2bd819bd62dcf24543ac40041fb2c0e4148116508c0`.
 - Codex, Hermes ACP, and DeepSeek Harness ACP are enabled. Generic Hermes keeps its imported OpenAI
   Codex session and frontier model picker. Three safe-mode Hermes instances pin every installed
   local Ollama model: `qwen3.8:latest`, `qwen3:4b-instruct-2507-q4_K_M`, and
@@ -62,6 +61,8 @@ Hermes curates and learns from those files. No custom memory MCP exists or is ne
   to the bottom of an otherwise empty sidebar.
 - The permanent, collapsible project-tree sidebar is the default on every Caduceus client; projects
   contain their threads, matching Kay's GPT navigation instead of hiding projects in a filter.
+- `t3 thread rename <thread> <title>` renames imported or native threads through the authenticated
+  local MCP session; the imported GPT threads have concise subject titles instead of raw prompts.
 - The release smoke test, runtime endpoint scan, missing-`connect` CLI check, both loopback listener
   checks, HTTP health, service restart, restricted-key denial, and legacy Connect-state scan passed.
   Retired Connect keys and cloudflared binaries are preserved under

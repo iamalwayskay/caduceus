@@ -2,7 +2,7 @@ import { assert, it } from "@effect/vitest";
 import { RunId, ThreadId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 
-import { type ThreadTools, waitForRun } from "./thread.ts";
+import { renameThread, type ThreadTools, waitForRun } from "./thread.ts";
 
 const threadId = ThreadId.make("thread-1");
 const runId = RunId.make("run-1");
@@ -71,5 +71,29 @@ it.effect("--wait reports its run's result when a later run is the one waiting",
       runId,
       status: "completed",
     });
+  }),
+);
+
+it.effect("rename updates thread metadata through the authenticated MCP session", () =>
+  Effect.gen(function* () {
+    const renamed = {
+      threadId,
+      action: "rename" as const,
+      commandId: "command-1",
+      sequence: 1,
+      title: "Useful title",
+      titleRegeneration: null,
+      linkedPullRequest: null,
+      updatedAt: "2026-10-28T00:00:00.000Z",
+    };
+    const { tools, calls } = scriptedTools({ t3_thread_update: [renamed] });
+
+    assert.deepStrictEqual(yield* renameThread(tools, threadId, "Useful title"), renamed);
+    assert.deepStrictEqual(calls, [
+      {
+        tool: "t3_thread_update",
+        args: { threadId, action: "rename", title: "Useful title" },
+      },
+    ]);
   }),
 );
