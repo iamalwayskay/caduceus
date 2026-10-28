@@ -1,7 +1,7 @@
 // @effect-diagnostics nodeBuiltinImport:off -- Node's native streaming zstd decoder is the archive-format adapter; Effect has no zstd stream API.
 import * as NodeOS from "node:os";
-import { createReadStream } from "node:fs";
 import { open as openNodeFile, stat as statNodeFile, type FileHandle } from "node:fs/promises";
+import * as NodeStream from "node:stream";
 import { createZstdDecompress } from "node:zlib";
 
 import {
@@ -752,13 +752,29 @@ export const make = Effect.gen(function* () {
     fileSystem.stat(target).pipe(Effect.asSome, Effect.orElseSucceed(Option.none));
 
   const transcriptChunks = async function* (file: FileHandle, chunkSize: number) {
-    const input = createReadStream("", { fd: file.fd, autoClose: false, highWaterMark: chunkSize });
-    const stream = input.pipe(createZstdDecompress());
-    for await (const value of stream) {
-      const chunk = value instanceof Uint8Array ? value : Buffer.from(value);
-      for (let offset = 0; offset < chunk.byteLength; offset += chunkSize) {
-        yield chunk.subarray(offset, Math.min(offset + chunkSize, chunk.byteLength));
+    const compressed = NodeStream.Readable.from(
+      (async function* () {
+        let position = 0;
+        while (true) {
+          const buffer = Buffer.allocUnsafe(chunkSize);
+          const { bytesRead } = await file.read(buffer, 0, buffer.byteLength, position);
+          if (bytesRead === 0) return;
+          position += bytesRead;
+          yield buffer.subarray(0, bytesRead);
+        }
+      })(),
+    );
+    const stream = compressed.pipe(createZstdDecompress());
+    try {
+      for await (const value of stream) {
+        const chunk = value instanceof Uint8Array ? value : Buffer.from(value);
+        for (let offset = 0; offset < chunk.byteLength; offset += chunkSize) {
+          yield chunk.subarray(offset, Math.min(offset + chunkSize, chunk.byteLength));
+        }
       }
+    } finally {
+      stream.destroy();
+      compressed.destroy();
     }
   };
 
