@@ -23,15 +23,13 @@ Hermes curates and learns from those files. No custom memory MCP exists or is ne
   `/home/kay/Code/AI/apps/caduceus/release/Caduceus-0.1.3-x86_64.AppImage`, with its application-menu
   entry at `~/.local/share/applications/caduceus.desktop`. It uses
   `/home/kay/Code/AI/data/caduceus`, opens the primary Caduceus repository on `main`, and serves its
-  bundled backend on `0.0.0.0:3773` while the app is open. Fifty projects are registered: the
-  top-level repositories under `~/Code`, the five AI repositories, the active brand workspaces,
-  Mirius, and the existing imported workspaces. The legacy `/home/kay/Code/AI` entry remains only
-  because it owns one imported thread and the non-destructive project removal correctly refused to
-  delete that history. UFW restricts
+  bundled backend on `0.0.0.0:3773` while the app is open. Its project tree mirrors Kay's GPT
+  sidebar: Mirius, Mirieth, AI, Thalamus, Lutristy, and Ivorae; Projectless is the built-in
+  unassigned-thread section. UFW restricts
   non-loopback access to the home LAN and WireGuard. The former standalone user service is disabled to prevent two
   processes from owning the same state directory. The CLI launcher remains
   `/home/kay/.local/bin/caduceus`. The installed
-  AppImage SHA-256 is `c8f3d4ddb063bd1810cad0d20db6826007e8326c3ea49f7e37c518d39d0563cc`.
+  AppImage SHA-256 is `a65553f1cdeccfcd0a10fd7b33924485bb852ee4f29b8834166b1fc9058f1748`.
 - Codex, Hermes ACP, and DeepSeek Harness ACP are enabled. Generic Hermes keeps its imported OpenAI
   Codex session and frontier model picker. Three safe-mode Hermes instances pin every installed
   local Ollama model: `qwen3.8:latest`, `qwen3:4b-instruct-2507-q4_K_M`, and
@@ -62,6 +60,8 @@ Hermes curates and learns from those files. No custom memory MCP exists or is ne
   health reports ready with eight models even when the graphical launcher has a restricted PATH.
 - Sidebar thread shelves flow directly beneath Search; settled conversations are no longer pinned
   to the bottom of an otherwise empty sidebar.
+- The permanent, collapsible project-tree sidebar is the default on every Caduceus client; projects
+  contain their threads, matching Kay's GPT navigation instead of hiding projects in a filter.
 - The release smoke test, runtime endpoint scan, missing-`connect` CLI check, both loopback listener
   checks, HTTP health, service restart, restricted-key denial, and legacy Connect-state scan passed.
   Retired Connect keys and cloudflared binaries are preserved under

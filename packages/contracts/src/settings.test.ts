@@ -198,6 +198,12 @@ describe("ClientSettings notifications", () => {
   });
 });
 
+describe("ClientSettings sidebar", () => {
+  it("defaults new clients to the project tree", () => {
+    expect(decodeClientSettings({}).legacySidebarEnabled).toBe(true);
+  });
+});
+
 describe("ClientSettings quit confirmation", () => {
   it.each([
     [true, "hold"],

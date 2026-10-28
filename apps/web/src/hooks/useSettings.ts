@@ -417,8 +417,7 @@ export function useEnvironmentIdentificationMode(): EnvironmentIdentificationMod
 /** Wait for hydration: swapping sidebar implementations after mount remounts the whole tree. */
 export function useLegacySidebarEnabled(): boolean {
   const settingsHydrated = useClientSettingsHydrated();
-  const legacySidebarEnabled = useClientSettings((settings) => settings.legacySidebarEnabled);
-  return settingsHydrated && legacySidebarEnabled;
+  return settingsHydrated;
 }
 
 export async function prepareModelPreferencesPatch(
