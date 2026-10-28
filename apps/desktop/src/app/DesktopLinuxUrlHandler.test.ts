@@ -10,6 +10,7 @@ import * as PlatformError from "effect/PlatformError";
 import * as Sink from "effect/Sink";
 import * as Stream from "effect/Stream";
 import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
+import { vi } from "vite-plus/test";
 
 import * as DesktopEnvironment from "./DesktopEnvironment.ts";
 import * as DesktopAssets from "./DesktopAssets.ts";
@@ -210,6 +211,27 @@ describe("DesktopLinuxUrlHandler", () => {
       });
     },
   );
+
+  it.effect("preserves required launch environment without leaking unrelated values", () => {
+    vi.stubEnv("T3CODE_HOME", "/home/alice/Code AI/data/caduceus");
+    vi.stubEnv("T3CODE_DESKTOP_LAN_HOST", "192.168.1.185");
+    vi.stubEnv("VENICE_API_KEY", "must-not-be-written");
+    const recorded = emptyRecording();
+
+    return runRegister(recorded).pipe(
+      Effect.tap(() =>
+        Effect.sync(() => {
+          assert.include(
+            recorded.files[0]?.content,
+            'Exec=/usr/bin/env "T3CODE_HOME=/home/alice/Code AI/data/caduceus" "T3CODE_DESKTOP_LAN_HOST=192.168.1.185" /home/alice/Applications/T3-Code.AppImage %U',
+          );
+          assert.notInclude(recorded.files[0]?.content, "VENICE_API_KEY");
+          assert.notInclude(recorded.files[0]?.content, "must-not-be-written");
+        }),
+      ),
+      Effect.ensuring(Effect.sync(() => vi.unstubAllEnvs())),
+    );
+  });
 
   it.effect("falls back to the process executable outside an AppImage", () => {
     const recorded = emptyRecording();

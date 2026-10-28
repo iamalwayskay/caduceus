@@ -74,6 +74,22 @@ const escapeUrlHandlerExecTarget = (value: string): string =>
     ? escapeDesktopEntryExecArgument(value)
     : escapeDesktopEntryString(value.replaceAll("%", "%%"));
 
+const URL_HANDLER_LAUNCH_ENVIRONMENT_NAMES = ["T3CODE_HOME", "T3CODE_DESKTOP_LAN_HOST"] as const;
+
+export interface UrlHandlerLaunchEnvironmentEntry {
+  readonly name: (typeof URL_HANDLER_LAUNCH_ENVIRONMENT_NAMES)[number];
+  readonly value: string;
+}
+
+export function selectUrlHandlerLaunchEnvironment(
+  env: Readonly<Record<string, string | undefined>>,
+): ReadonlyArray<UrlHandlerLaunchEnvironmentEntry> {
+  return URL_HANDLER_LAUNCH_ENVIRONMENT_NAMES.flatMap((name) => {
+    const value = env[name]?.trim();
+    return value === undefined || value.length === 0 ? [] : [{ name, value }];
+  });
+}
+
 // The AppImage integration entry owns the window identity. This
 // hidden URL-only entry must not compete with it for StartupWMClass matching.
 export function renderUrlHandlerDesktopEntry(input: {
@@ -81,12 +97,25 @@ export function renderUrlHandlerDesktopEntry(input: {
   readonly execTarget: string;
   readonly scheme: string;
   readonly iconPath?: string;
+  readonly launchEnvironment?: ReadonlyArray<UrlHandlerLaunchEnvironmentEntry>;
 }): string {
+  const execTarget = escapeUrlHandlerExecTarget(input.execTarget);
+  const exec =
+    input.launchEnvironment === undefined || input.launchEnvironment.length === 0
+      ? `${execTarget} %U`
+      : [
+          "/usr/bin/env",
+          ...input.launchEnvironment.map(({ name, value }) =>
+            escapeDesktopEntryExecArgument(`${name}=${value}`),
+          ),
+          execTarget,
+          "%U",
+        ].join(" ");
   return [
     "[Desktop Entry]",
     "Type=Application",
     `Name=${escapeDesktopEntryString(input.displayName)}`,
-    `Exec=${escapeUrlHandlerExecTarget(input.execTarget)} %U`,
+    `Exec=${exec}`,
     ...(input.iconPath === undefined ? [] : [`Icon=${escapeDesktopEntryString(input.iconPath)}`]),
     "Terminal=false",
     "NoDisplay=true",
@@ -144,6 +173,7 @@ export const make = Effect.gen(function* () {
       displayName: environment.displayName,
       execTarget,
       scheme,
+      launchEnvironment: selectUrlHandlerLaunchEnvironment(process.env),
       ...(environment.isPackaged ? { iconPath } : {}),
     });
     // Avoid truncating the pre-ready entry while the portal may be reading it.

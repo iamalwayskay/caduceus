@@ -46,7 +46,9 @@ The deployed KPC command is `caduceus`. Runtime data lives outside the checkout.
 [STATE.md](./STATE.md) for the verified paths, commit, providers, and Haven deployment.
 `caduceus thread import <project>` imports the project's saved Claude and Codex session history
 within bounded safety limits, including Codex's plain and zstd-compressed archives; it does not
-discard sessions merely because they are older than 30 days.
+discard sessions merely because they are older than 30 days. Codex imports use the desktop app's
+authoritative project assignment and title metadata, omit agent-created child threads, and refresh
+stale importer-owned titles without duplicating messages.
 
 ### Linux desktop app
 
@@ -69,6 +71,16 @@ primary Caduceus repository on `main`, not this fork's build worktree and not th
 container directory. The model picker exposes five provider groups: Codex, Claude, DSH local
 models, Venice, and OpenCode Go. The final three use DSH's shared 112-model catalog, split into
 local Qwen/Decider, 74 Venice models, and 36 OpenCode Go models.
+
+On Linux, closing the last window keeps the bundled local backend running so paired phone and LAN
+clients remain connected. Launch Caduceus again to recreate the window; use the application Quit
+command when you intend to stop the backend. Generated `t3code://` handlers retain the Caduceus
+data-directory and LAN-host environment, so links reopen this same installation rather than a
+fresh upstream state directory.
+
+Hermes remains the separate recursive-learning application. Its built-in durable memory lives at
+`~/.hermes/memories/MEMORY.md`; ordinary project files are the shared substrate visible to agents
+working in the same checkout. Caduceus does not claim an automatic post-thread project curator.
 
 ### Upstream desktop packages
 

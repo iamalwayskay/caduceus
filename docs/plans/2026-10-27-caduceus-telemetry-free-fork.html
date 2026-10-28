@@ -240,6 +240,83 @@ Haven:  /srv/caduceus/{app,config,data}; hardened system service runs the same c
         </p>
       </section>
 
+      <h2>2026-10-28 corrective acceptance</h2>
+      <p class="lede">
+        The fork is not accepted because a build exists. It is accepted only when the installed
+        application survives a clean launch and the user-visible state below is proven from that
+        application. Manual database edits are migration inputs, never the finished fix.
+      </p>
+      <section class="card gate">
+        <h3>6. Make the installed application the single entry point</h3>
+        <p>
+          The application-menu entry, CLI activation command and direct AppImage launch resolve the
+          same Caduceus home, desktop environment and provider executables. A completed installation
+          never re-enters onboarding, and activation opens the requested existing project without
+          creating another server or checkout.
+        </p>
+        <p>
+          <strong>Checked by:</strong> automated desktop environment/onboarding regressions, a cold
+          application-menu launch, <code>caduceus app /home/kay/Desktop/Mirius</code>, one backend
+          owner, and a visible Mirius project tree.
+        </p>
+      </section>
+      <section class="card gate">
+        <h3>7. Import conversations with stable project and title identity</h3>
+        <p>
+          Active and archived Codex/Claude transcripts deduplicate by provider session identity.
+          Explicit project metadata wins over <code>cwd</code>; when only <code>cwd</code> exists, a
+          persisted assignment map preserves user corrections. Structured wrapper text is skipped
+          when choosing a title, and truncation is reported instead of being called “all history.”
+        </p>
+        <p>
+          <strong>Checked by:</strong> red/green fixtures for Projectless-versus-Mirius assignment,
+          archived duplicates, attachment wrappers, explicit titles, compressed archives and every
+          safety-limit result; then compare imported source IDs and titles against the real Mirius
+          and Projectless inventories.
+        </p>
+      </section>
+      <section class="card gate">
+        <h3>8. Prove providers and usage from the installed runtime</h3>
+        <p>
+          The picker exposes exactly Codex, Claude, DSH: Local models, Venice and OpenCode Go. Each
+          group is backed by an executable provider and its own filtered model inventory, not merely
+          a display label. Usage defaults to token counts and handles local/unpriced models without
+          hiding subscription usage where it exists.
+        </p>
+        <p>
+          <strong>Checked by:</strong> provider health/model-list reads from the desktop-safe
+          environment, one harmless turn per available provider family, and visible token usage
+          after a new turn.
+        </p>
+      </section>
+      <section class="card gate">
+        <h3>9. Use Hermes as the shared project-memory application</h3>
+        <p>
+          Caduceus does not invent a second memory service. Local and frontier agents share the same
+          ordinary project memory files; Hermes performs its existing recursive learning over those
+          files. Git synchronizes durable memory between the laptop and Haven, while session
+          transcripts remain available to every provider through Caduceus.
+        </p>
+        <p>
+          <strong>Checked by:</strong> a memory written through one provider is read through
+          another, Hermes records its learning in the project-owned location, and the same committed
+          memory is visible from Haven without copying secrets or machine-local state.
+        </p>
+      </section>
+      <section class="card gate">
+        <h3>10. Ship one clean, recoverable release</h3>
+        <p>
+          Build outputs live outside the source tree, the development branch tracks Kay's private
+          remote, installed desktop and CLI artifacts identify the exact commit, and stale release
+          directories are archived or removed only after their installed replacements are verified.
+        </p>
+        <p>
+          <strong>Checked by:</strong> clean Git status, tracked remote branch, artifact hashes,
+          installed launcher readback, full relevant test suites, production build and final desktop
+          smoke test.
+        </p>
+      </section>
+
       <h2>Resolved decisions</h2>
       <ul>
         <li>
@@ -278,7 +355,10 @@ Haven:  /srv/caduceus/{app,config,data}; hardened system service runs the same c
 
       <h2>Out of scope</h2>
       <ul>
-        <li>Reimplementing Hermes learning inside Caduceus.</li>
+        <li>
+          Reimplementing Hermes learning algorithms inside Caduceus; the existing Hermes application
+          is integrated as the learner.
+        </li>
         <li>Copying DSH or Unsloth internals into the fork.</li>
         <li>
           Removing provider authentication, local client pairing, update checks or provider catalogs

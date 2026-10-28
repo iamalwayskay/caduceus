@@ -240,6 +240,7 @@ const makeFileIdentityFixture = Effect.fn("AgentSessionScanner.test.makeFileIden
     return {
       scanner,
       workspace,
+      codexHomePath,
       opens: () => opens,
       replace: Effect.gen(function* () {
         yield* fileSystem.rename(filePath, savedPath);
@@ -999,6 +1000,207 @@ it.layer(NodeServices.layer)("AgentSessionScanner", (it) => {
   });
 
   describe("recentThreads", () => {
+    it.effect("uses the Codex session index title instead of deriving one from wrapper text", () =>
+      Effect.gen(function* () {
+        const path = yield* Path.Path;
+        const fileSystem = yield* FileSystem.FileSystem;
+        const nowMs = Date.parse("2026-08-24T12:00:00.000Z");
+        const claudeHomePath = yield* makeTempDir("t3code-claude-home-");
+        const codexHomePath = yield* makeTempDir("t3code-codex-home-");
+        const workspace = yield* makeTempDir("t3code-workspace-");
+
+        yield* writeTranscript({
+          filePath: path.join(
+            codexHomePath,
+            "sessions",
+            "2026",
+            "08",
+            "24",
+            "rollout-indexed.jsonl",
+          ),
+          contents: [
+            encodeTranscriptRecord({
+              type: "session_meta",
+              payload: { id: "indexed-session", cwd: workspace },
+            }),
+            encodeTranscriptRecord({
+              type: "event_msg",
+              payload: {
+                type: "user_message",
+                message: "# Files mentioned by the user:\n\n## My request:\nReview everything",
+              },
+            }),
+          ].join("\n"),
+          mtimeMs: nowMs,
+        });
+        yield* fileSystem.writeFileString(
+          path.join(codexHomePath, "session_index.jsonl"),
+          `${JSON.stringify({ id: "indexed-session", thread_name: "Review transaction corpus" })}\n`,
+        );
+
+        const threads = yield* runRecentThreads({
+          claudeHomePath,
+          codexHomePath,
+          workspaceRoot: workspace,
+        });
+
+        expect(threads.map((thread) => thread.title)).toEqual(["Review transaction corpus"]);
+      }),
+    );
+
+    it.effect("routes a Codex sidebar-assigned session to that project instead of its cwd", () =>
+      Effect.gen(function* () {
+        const path = yield* Path.Path;
+        const fileSystem = yield* FileSystem.FileSystem;
+        const nowMs = Date.parse("2026-08-24T12:00:00.000Z");
+        const claudeHomePath = yield* makeTempDir("t3code-claude-home-");
+        const codexHomePath = yield* makeTempDir("t3code-codex-home-");
+        const assignedWorkspace = yield* makeTempDir("t3code-assigned-workspace-");
+        const recordedCwd = yield* makeTempDir("t3code-recorded-cwd-");
+
+        yield* writeTranscript({
+          filePath: path.join(
+            codexHomePath,
+            "sessions",
+            "2026",
+            "08",
+            "24",
+            "rollout-assigned.jsonl",
+          ),
+          contents: [
+            encodeTranscriptRecord({
+              type: "session_meta",
+              payload: { id: "assigned-session", cwd: recordedCwd },
+            }),
+            encodeTranscriptRecord({
+              type: "event_msg",
+              payload: { type: "user_message", message: "Build the transaction corpus" },
+            }),
+          ].join("\n"),
+          mtimeMs: nowMs,
+        });
+        yield* fileSystem.writeFileString(
+          path.join(codexHomePath, ".codex-global-state.json"),
+          JSON.stringify({
+            "thread-project-assignments": {
+              "assigned-session": { projectKind: "local", projectId: "mirius" },
+            },
+            "local-projects": {
+              mirius: { id: "mirius", rootPaths: [assignedWorkspace] },
+            },
+          }),
+        );
+
+        const assigned = yield* runRecentThreads({
+          claudeHomePath,
+          codexHomePath,
+          workspaceRoot: assignedWorkspace,
+        });
+        const recorded = yield* runRecentThreads({
+          claudeHomePath,
+          codexHomePath,
+          workspaceRoot: recordedCwd,
+        });
+
+        expect(assigned.map((thread) => thread.providerSessionId)).toEqual(["assigned-session"]);
+        expect(recorded).toEqual([]);
+      }),
+    );
+
+    it.effect(
+      "falls back to transcript cwd and derived title when Codex metadata is malformed",
+      () =>
+        Effect.gen(function* () {
+          const path = yield* Path.Path;
+          const fileSystem = yield* FileSystem.FileSystem;
+          const nowMs = Date.parse("2026-08-24T12:00:00.000Z");
+          const claudeHomePath = yield* makeTempDir("t3code-claude-home-");
+          const codexHomePath = yield* makeTempDir("t3code-codex-home-");
+          const workspace = yield* makeTempDir("t3code-workspace-");
+
+          yield* writeTranscript({
+            filePath: path.join(
+              codexHomePath,
+              "sessions",
+              "2026",
+              "08",
+              "24",
+              "rollout-fallback.jsonl",
+            ),
+            contents: [
+              encodeTranscriptRecord({
+                type: "session_meta",
+                payload: { id: "fallback-session", cwd: workspace },
+              }),
+              encodeTranscriptRecord({
+                type: "event_msg",
+                payload: { type: "user_message", message: "Use the transcript fallback" },
+              }),
+            ].join("\n"),
+            mtimeMs: nowMs,
+          });
+          yield* fileSystem.writeFileString(
+            path.join(codexHomePath, "session_index.jsonl"),
+            "bad\n",
+          );
+          yield* fileSystem.writeFileString(
+            path.join(codexHomePath, ".codex-global-state.json"),
+            "not json",
+          );
+
+          const threads = yield* runRecentThreads({
+            claudeHomePath,
+            codexHomePath,
+            workspaceRoot: workspace,
+          });
+
+          expect(threads).toMatchObject([
+            { providerSessionId: "fallback-session", title: "Use the transcript fallback" },
+          ]);
+        }),
+    );
+
+    it.effect("excludes Codex agent-created child threads from project conversations", () =>
+      Effect.gen(function* () {
+        const path = yield* Path.Path;
+        const nowMs = Date.parse("2026-08-24T12:00:00.000Z");
+        const claudeHomePath = yield* makeTempDir("t3code-claude-home-");
+        const codexHomePath = yield* makeTempDir("t3code-codex-home-");
+        const workspace = yield* makeTempDir("t3code-workspace-");
+
+        yield* writeTranscript({
+          filePath: path.join(codexHomePath, "sessions", "2026", "08", "24", "rollout-child.jsonl"),
+          contents: [
+            encodeTranscriptRecord({
+              type: "session_meta",
+              payload: {
+                id: "child-session",
+                cwd: workspace,
+                thread_source: "agent_created_thread",
+              },
+            }),
+            encodeTranscriptRecord({
+              type: "response_item",
+              payload: {
+                type: "message",
+                role: "user",
+                content: [{ type: "input_text", text: "<recommended_plugins />" }],
+              },
+            }),
+          ].join("\n"),
+          mtimeMs: nowMs,
+        });
+
+        const threads = yield* runRecentThreads({
+          claudeHomePath,
+          codexHomePath,
+          workspaceRoot: workspace,
+        });
+
+        expect(threads).toEqual([]);
+      }),
+    );
+
     it.effect("imports home-directory sessions only when home is explicitly selected", () =>
       Effect.gen(function* () {
         const path = yield* Path.Path;
@@ -1501,6 +1703,37 @@ it.layer(NodeServices.layer)("AgentSessionScanner", (it) => {
           _tag: "Importable",
           thread: { providerSessionId: "replaced-session" },
           source: { size: imported.source.size, mtimeMs: imported.source.mtimeMs },
+        });
+      }),
+    );
+
+    it.effect("carries an authoritative Codex title for unchanged completed history", () =>
+      Effect.gen(function* () {
+        const fileSystem = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const fixture = yield* makeFileIdentityFixture(44n, 45n);
+        yield* fileSystem.writeFileString(
+          path.join(fixture.codexHomePath, "session_index.jsonl"),
+          `${JSON.stringify({
+            id: "original-session",
+            thread_name: "Canonical Codex title",
+          })}\n`,
+        );
+        const initial = yield* fixture.scanner
+          .recentThreads(fixture.workspace)
+          .pipe(Stream.runCollect);
+        const imported = initial[0];
+        expect(imported?._tag).toBe("Importable");
+        if (imported?._tag !== "Importable") return;
+
+        const completed = yield* fixture.scanner
+          .recentThreads(fixture.workspace, [imported.source])
+          .pipe(Stream.runCollect);
+
+        expect(completed[0]).toEqual({
+          _tag: "AlreadyImported",
+          source: imported.source,
+          title: "Canonical Codex title",
         });
       }),
     );

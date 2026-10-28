@@ -27,11 +27,13 @@ import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as NodeCrypto from "node:crypto";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 
 import * as EventSink from "../orchestration-v2/EventSink.ts";
+import * as EventStore from "../orchestration-v2/EventStore.ts";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import * as Orchestrator from "../orchestration-v2/Orchestrator.ts";
 import * as ProviderSessionRuntime from "../persistence/ProviderSessionRuntime.ts";
@@ -57,19 +59,6 @@ class AgentSessionUnresumableSessionError extends Schema.TaggedError<AgentSessio
 ) {
   override get message(): string {
     return `Session '${this.providerSessionId}' from '${this.source}' cannot be resumed.`;
-  }
-}
-
-class AgentSessionThreadProjectConflictError extends Schema.TaggedError<AgentSessionThreadProjectConflictError>()(
-  "AgentSessionThreadProjectConflictError",
-  {
-    threadId: ThreadId,
-    expectedProjectId: ProjectId,
-    actualProjectId: ProjectId,
-  },
-) {
-  override get message(): string {
-    return `Imported thread '${this.threadId}' belongs to project '${this.actualProjectId}', not '${this.expectedProjectId}'.`;
   }
 }
 
@@ -170,8 +159,49 @@ const make = Effect.gen(function* () {
   const orchestrator = yield* Orchestrator.OrchestratorV2;
   const projects = yield* ProjectService.ProjectService;
   const eventSink = yield* EventSink.EventSinkV2;
+  const eventStore = yield* EventStore.EventStoreV2;
   const idAllocator = yield* IdAllocator.IdAllocatorV2;
   const runtimes = yield* ProviderSessionRuntime.ProviderSessionRuntimeRepository;
+  const refreshImportedMetadata = Effect.fn("refreshImportedAgentSessionMetadata")(function* (
+    thread: OrchestrationV2AppThread,
+    title: string | null,
+    targetProjectId: ProjectId,
+    source: AgentSessionImportSource,
+  ) {
+    if (thread.historyOrigin !== "v1_import") return false;
+    const nextTitle = title ?? thread.title;
+    if (thread.title === nextTitle && thread.projectId === targetProjectId) return true;
+    const storedEvents = yield* eventStore.read({ threadId: thread.id }).pipe(Stream.runCollect);
+    const hasNonImportedActivity = storedEvents.some(
+      (stored) => "event" in stored && !stored.event.id.startsWith(`${IMPORT_EVENT_PREFIX}:`),
+    );
+    if (hasNonImportedActivity) return false;
+    const occurredAt = yield* DateTime.now;
+    const revision = NodeCrypto.createHash("sha256")
+      .update(`${targetProjectId}\0${nextTitle}`)
+      .digest("hex")
+      .slice(0, 16);
+    yield* eventSink.write({
+      events: [
+        {
+          id: EventId.make(
+            `${IMPORT_EVENT_PREFIX}:thread-metadata:${thread.id}:${source.device}:${source.inode ?? "none"}:${source.mtimeMs ?? "none"}:${source.size}:${revision}`,
+          ),
+          type: "thread.metadata-updated",
+          threadId: thread.id,
+          providerInstanceId: source.providerInstanceId,
+          occurredAt,
+          payload: {
+            ...thread,
+            projectId: targetProjectId,
+            title: nextTitle,
+            updatedAt: occurredAt,
+          },
+        },
+      ],
+    });
+    return true;
+  });
   const importRecentAgentThreads = Effect.fn("importRecentAgentThreadsV2")(function* (
     input: AgentSessionImportInput,
   ) {
@@ -227,6 +257,15 @@ const make = Effect.gen(function* () {
           `import:${source.providerInstanceId}:${source.providerSessionId}`,
         );
         if (outcome._tag === "AlreadyImported") {
+          const existing = yield* Effect.option(orchestrator.getThreadRecords(threadId, []));
+          if (Option.isSome(existing) && existing.value.thread.projectId === input.projectId) {
+            yield* refreshImportedMetadata(
+              existing.value.thread,
+              outcome.title,
+              input.projectId,
+              source,
+            );
+          }
           importedThreadIds.add(threadId);
           importedCount += 1;
           return;
@@ -250,36 +289,34 @@ const make = Effect.gen(function* () {
             });
           }
           const driver = ProviderDriverKind.make(thread.source);
-          const persistRuntime = runtimes.upsert(
-            {
-              threadId,
-              providerName: driver,
-              providerInstanceId: thread.providerInstanceId,
-              adapterKey: driver,
-              runtimeMode: DEFAULT_RUNTIME_MODE,
-              status: "stopped",
-              lastSeenAt: thread.updatedAt,
-              resumeCursor:
-                thread.source === "codex"
-                  ? { threadId: thread.providerSessionId }
-                  : { threadId, resume: thread.providerSessionId },
-              runtimePayload: { cwd: project.workspaceRoot },
-            },
-            { onConflict: "ignore" },
-          );
+          const runtime = {
+            threadId,
+            providerName: driver,
+            providerInstanceId: thread.providerInstanceId,
+            adapterKey: driver,
+            runtimeMode: DEFAULT_RUNTIME_MODE,
+            status: "stopped" as const,
+            lastSeenAt: thread.updatedAt,
+            resumeCursor:
+              thread.source === "codex"
+                ? { threadId: thread.providerSessionId }
+                : { threadId, resume: thread.providerSessionId },
+            runtimePayload: { cwd: project.workspaceRoot },
+          };
+          const persistRuntime = runtimes.upsert(runtime, { onConflict: "ignore" });
           const existing = yield* Effect.option(orchestrator.getThreadRecords(threadId, []));
           if (Option.isSome(existing)) {
-            if (existing.value.thread.projectId !== input.projectId) {
-              return yield* new AgentSessionThreadProjectConflictError({
-                threadId,
-                expectedProjectId: input.projectId,
-                actualProjectId: existing.value.thread.projectId,
-              });
-            }
             if (existing.value.thread.historyOrigin !== "v1_import") {
               return yield* new AgentSessionThreadModifiedError({ threadId });
             }
-            yield* persistRuntime;
+            const refreshed = yield* refreshImportedMetadata(
+              existing.value.thread,
+              thread.title,
+              input.projectId,
+              source,
+            );
+            if (!refreshed) return yield* new AgentSessionThreadModifiedError({ threadId });
+            yield* runtimes.upsert(runtime);
             yield* runtimes.recordImportedTranscript({ threadId, source });
             return true;
           }

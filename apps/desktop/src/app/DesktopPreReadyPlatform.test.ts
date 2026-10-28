@@ -188,6 +188,35 @@ describe("DesktopPreReadyPlatform", () => {
     ).pipe(Effect.ensuring(Effect.sync(() => vi.unstubAllEnvs())));
   });
 
+  it.effect("preserves required launch environment in the early portal entry", () => {
+    vi.stubEnv("VITE_DEV_SERVER_URL", "");
+    vi.stubEnv("XDG_DATA_HOME", "/xdg");
+    vi.stubEnv("APPIMAGE", "/Applications/current.AppImage");
+    vi.stubEnv("T3CODE_HOME", "/home/alice/Code AI/data/caduceus");
+    vi.stubEnv("T3CODE_DESKTOP_LAN_HOST", "192.168.1.185");
+    vi.stubEnv("VENICE_API_KEY", "must-not-be-written");
+    getSwitchValueMock.mockReturnValue("");
+
+    return Effect.scoped(
+      Effect.gen(function* () {
+        yield* Layer.build(
+          DesktopPreReadyPlatform.layer.pipe(
+            Layer.provide(Layer.succeed(HostProcess.Platform, "linux")),
+          ),
+        );
+        const entry = writeFileSyncMock.mock.calls.find(
+          ([path]) => path === "/xdg/applications/com.t3tools.T3Code.desktop",
+        )?.[1];
+        assert.include(
+          entry,
+          'Exec=/usr/bin/env "T3CODE_HOME=/home/alice/Code AI/data/caduceus" "T3CODE_DESKTOP_LAN_HOST=192.168.1.185" /Applications/current.AppImage %U',
+        );
+        assert.notInclude(entry, "VENICE_API_KEY");
+        assert.notInclude(entry, "must-not-be-written");
+      }),
+    ).pipe(Effect.ensuring(Effect.sync(() => vi.unstubAllEnvs())));
+  });
+
   it.effect(
     "acquires a synchronous pre-ready layer before an asynchronous Clerk-shaped layer",
     () =>

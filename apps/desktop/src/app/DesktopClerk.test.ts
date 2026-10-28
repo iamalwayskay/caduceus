@@ -37,10 +37,29 @@ import * as DesktopClerk from "./DesktopClerk.ts";
 import * as DesktopWebLinks from "./DesktopWebLinks.ts";
 import * as DesktopEnvironment from "./DesktopEnvironment.ts";
 import * as DesktopPreReadyFileSystem from "./DesktopPreReadyFileSystem.ts";
+import * as DesktopWindow from "../window/DesktopWindow.ts";
 
 const ignoreWebLinks = DesktopWebLinks.DesktopWebLinks.of({
   receive: () => Effect.void,
   setRendererReady: () => Effect.void,
+});
+
+const ignoreDesktopWindow = DesktopWindow.DesktopWindow.of({
+  createMain: Effect.die("unexpected window creation"),
+  ensureMain: Effect.die("unexpected window creation"),
+  revealOrCreateMain: Effect.die("unexpected window creation"),
+  activate: Effect.void,
+  createMainIfBackendReady: Effect.void,
+  showConnectingSplash: Effect.void,
+  handleBackendReady: () => Effect.void,
+  handleBackendNotReady: Effect.void,
+  flushMainWindowBounds: Effect.void,
+  prepareCaptureReveal: Effect.void,
+  dispatchMenuAction: () => Effect.void,
+  dispatchSnapShotEvent: () => Effect.void,
+  zoomMain: () => Effect.void,
+  runMainContentsCommand: () => Effect.void,
+  syncAppearance: Effect.void,
 });
 
 const layerDesktopClerk = (
@@ -195,10 +214,46 @@ describe("DesktopClerk", () => {
         Effect.provide(layerDesktopClerk(true, [], "darwin", undefined, undefined, listeners)),
         Effect.provideService(ElectronApp.ElectronApp, electronApp),
         Effect.provideService(ElectronWindow.ElectronWindow, electronWindow),
+        Effect.provideService(DesktopWindow.DesktopWindow, ignoreDesktopWindow),
         Effect.provideService(DesktopWebLinks.DesktopWebLinks, ignoreWebLinks),
       );
     },
   );
+
+  it.effect("recreates the window when the app icon launches a background-only instance", () => {
+    storageMock.mockReturnValue(storageAdapter);
+    createClerkBridgeMock.mockReturnValue({ cleanup: vi.fn(), isPrimaryInstance: true });
+    const listeners = new Map<string, (...args: unknown[]) => void>();
+    const activated = Promise.withResolvers<void>();
+    const electronApp = {
+      on: (eventName: string, listener: (...args: unknown[]) => void) =>
+        Effect.sync(() => {
+          listeners.set(eventName, listener);
+        }),
+    } as unknown as ElectronApp.ElectronApp["Service"];
+    const electronWindow = {
+      currentMainOrFirst: Effect.succeedNone,
+      reveal: () => Effect.die("unexpected existing window reveal"),
+    } as unknown as ElectronWindow.ElectronWindow["Service"];
+    const desktopWindow = {
+      ...ignoreDesktopWindow,
+      activate: Effect.sync(() => activated.resolve()),
+    } as DesktopWindow.DesktopWindow["Service"];
+
+    return Effect.gen(function* () {
+      const clerk = yield* DesktopClerk.DesktopClerk;
+      yield* clerk.configure;
+      listeners.get("second-instance")!({}, ["t3"]);
+      yield* Effect.promise(() => activated.promise);
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(layerDesktopClerk(true, [], "linux", undefined, undefined, listeners)),
+      Effect.provideService(ElectronApp.ElectronApp, electronApp),
+      Effect.provideService(ElectronWindow.ElectronWindow, electronWindow),
+      Effect.provideService(DesktopWindow.DesktopWindow, desktopWindow),
+      Effect.provideService(DesktopWebLinks.DesktopWebLinks, ignoreWebLinks),
+    );
+  });
 
   it.effect("delivers queued startup links and later links once in arrival order", () => {
     storageMock.mockReturnValue(storageAdapter);
@@ -235,6 +290,7 @@ describe("DesktopClerk", () => {
         ElectronWindow.ElectronWindow,
         {} as ElectronWindow.ElectronWindow["Service"],
       ),
+      Effect.provideService(DesktopWindow.DesktopWindow, ignoreDesktopWindow),
       Effect.provideService(
         DesktopWebLinks.DesktopWebLinks,
         DesktopWebLinks.DesktopWebLinks.of({
@@ -321,6 +377,7 @@ it.effect(
       Effect.provide(layerDesktopClerk(true, [], "darwin", undefined, undefined, listeners)),
       Effect.provideService(ElectronApp.ElectronApp, electronApp),
       Effect.provideService(ElectronWindow.ElectronWindow, electronWindow),
+      Effect.provideService(DesktopWindow.DesktopWindow, ignoreDesktopWindow),
       Effect.provideService(DesktopWebLinks.DesktopWebLinks, ignoreWebLinks),
     );
   },
@@ -407,6 +464,7 @@ it.effect.each(["startup", "open-url", "early-second-instance"] as const)(
           ElectronWindow.ElectronWindow,
           {} as ElectronWindow.ElectronWindow["Service"],
         ),
+        Effect.provideService(DesktopWindow.DesktopWindow, ignoreDesktopWindow),
         Effect.provideService(DesktopWebLinks.DesktopWebLinks, ignoreWebLinks),
       );
     }).pipe(Effect.scoped),
@@ -454,6 +512,7 @@ it.effect("hands web and app links to the renderer and leaves other links alone"
         ElectronWindow.ElectronWindow,
         {} as ElectronWindow.ElectronWindow["Service"],
       ),
+      Effect.provideService(DesktopWindow.DesktopWindow, ignoreDesktopWindow),
       Effect.provideService(
         DesktopWebLinks.DesktopWebLinks,
         DesktopWebLinks.DesktopWebLinks.of({

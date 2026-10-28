@@ -287,7 +287,10 @@ export const make = DesktopLifecycle.of({
         Effect.gen(function* () {
           const app = yield* ElectronApp.ElectronApp;
           const state = yield* DesktopState.DesktopState;
-          if (environment.platform !== "darwin" && !(yield* Ref.get(state.quitting))) {
+          // On Linux, closing the UI must not tear down the local backend: paired
+          // phones and LAN clients keep using it, and app activation recreates
+          // the main window. Windows retains its ordinary last-window quit.
+          if (environment.platform === "win32" && !(yield* Ref.get(state.quitting))) {
             yield* app.quit;
           }
         }).pipe(Effect.withSpan("desktop.lifecycle.windowAllClosed")),

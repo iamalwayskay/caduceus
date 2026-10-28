@@ -187,6 +187,14 @@ const knownWindowsCliDirs = (env: NodeJS.ProcessEnv): ReadonlyArray<string> => [
   ),
 ];
 
+const knownPosixCliDirs = (env: NodeJS.ProcessEnv): ReadonlyArray<string> =>
+  trimNonEmpty(env.HOME).pipe(
+    Option.match({
+      onNone: () => [],
+      onSome: (value) => [`${value}/.local/bin`, `${value}/bin`],
+    }),
+  );
+
 const startMarker = (name: string) => `__T3CODE_ENV_${name}_START__`;
 const endMarker = (name: string) => `__T3CODE_ENV_${name}_END__`;
 
@@ -411,6 +419,7 @@ const installPosixEnvironment = Effect.fn("desktop.shellEnvironment.installPosix
         : Option.none<string>();
     const mergedPath = mergePaths(config.platform, [
       trimNonEmpty(shellEnvironment.PATH).pipe(Option.orElse(() => launchctlPath)),
+      trimNonEmpty(knownPosixCliDirs(config.env).join(":")),
       readEnvPath(config.env),
     ]);
 

@@ -80,6 +80,27 @@ const CodexTurnMetadata = Schema.Struct({
   turn_id: Schema.optional(Schema.Union([Schema.String, Schema.Null])),
 });
 
+const CodexSessionIndexEntry = Schema.Struct({
+  id: Schema.String,
+  thread_name: Schema.String,
+});
+
+const CodexProjectAssignment = Schema.Struct({
+  projectKind: Schema.String,
+  projectId: Schema.String,
+});
+
+const CodexLocalProject = Schema.Struct({
+  rootPaths: Schema.Array(Schema.String),
+});
+
+const CodexGlobalState = Schema.Struct({
+  "thread-project-assignments": Schema.optional(
+    Schema.Record(Schema.String, CodexProjectAssignment),
+  ),
+  "local-projects": Schema.optional(Schema.Record(Schema.String, CodexLocalProject)),
+});
+
 const TranscriptRecord = Schema.Struct({
   type: Schema.optional(Schema.String),
   timestamp: Schema.optional(Schema.String),
@@ -112,6 +133,10 @@ const decodeTranscriptRecord = Schema.decodeUnknownOption(Schema.fromJsonString(
 const decodeTranscriptValue = Schema.decodeUnknownOption(TranscriptRecord);
 const selectTranscriptPath = createTranscriptJsonSelector(TranscriptRecord);
 const decodeCodexTurnMetadata = Schema.decodeUnknownOption(CodexTurnMetadata);
+const decodeCodexSessionIndexEntry = Schema.decodeUnknownOption(
+  Schema.fromJsonString(CodexSessionIndexEntry),
+);
+const decodeCodexGlobalState = Schema.decodeUnknownOption(Schema.fromJsonString(CodexGlobalState));
 
 type DecodedTranscriptRecord = typeof TranscriptRecord.Type;
 
@@ -145,7 +170,11 @@ export type AgentSessionRecentThread =
       readonly thread: AgentSessionThread;
       readonly source: AgentSessionImportSource;
     }
-  | { readonly _tag: "AlreadyImported"; readonly source: AgentSessionImportSource }
+  | {
+      readonly _tag: "AlreadyImported";
+      readonly source: AgentSessionImportSource;
+      readonly title: string | null;
+    }
   | { readonly _tag: "Duplicate"; readonly source: AgentSessionImportSource }
   | { readonly _tag: "Skipped" };
 
@@ -168,10 +197,12 @@ interface RawCandidate {
   readonly providerInstanceId: ProviderInstanceId;
   readonly threadCount: number;
   readonly lastActiveAtMs: number | null;
-  readonly transcripts: ReadonlyArray<{
-    readonly filePath: string;
-    readonly mtimeMs: number | null;
-  }>;
+  readonly transcripts: ReadonlyArray<TranscriptCandidate>;
+}
+
+interface CodexDesktopMetadata {
+  readonly projectRootsBySessionId: ReadonlyMap<string, string>;
+  readonly titlesBySessionId: ReadonlyMap<string, string>;
 }
 
 interface TranscriptCandidate {
@@ -179,6 +210,7 @@ interface TranscriptCandidate {
   readonly mtimeMs: number;
   readonly providerInstanceId: ProviderInstanceId;
   readonly size: number;
+  readonly codexMetadata: CodexDesktopMetadata | null;
 }
 
 interface MetadataReadBudget {
@@ -551,7 +583,11 @@ function isT3ManagedWorktree(
 }
 
 // false stops metadata scanning for an excluded rollout, even if later records contain a cwd.
-function extractCwd(line: string, source: AgentSessionSource): string | null | false {
+function extractCwd(
+  line: string,
+  source: AgentSessionSource,
+  codexMetadata: CodexDesktopMetadata | null = null,
+): string | null | false {
   let parsed: unknown;
   try {
     parsed = JSON.parse(line);
@@ -567,7 +603,8 @@ function extractCwd(line: string, source: AgentSessionSource): string | null | f
   const payload = record.payload;
   if (typeof payload === "object" && payload !== null) {
     if (source === "codex" && record.type === "session_meta") {
-      const sessionSource = (payload as Record<string, unknown>).source;
+      const payloadRecord = payload as Record<string, unknown>;
+      const sessionSource = payloadRecord.source;
       if (
         typeof sessionSource === "object" &&
         sessionSource !== null &&
@@ -576,6 +613,16 @@ function extractCwd(line: string, source: AgentSessionSource): string | null | f
       ) {
         return false;
       }
+      if (payloadRecord.thread_source === "agent_created_thread") return false;
+      const sessionId =
+        typeof payloadRecord.id === "string"
+          ? payloadRecord.id.trim()
+          : typeof payloadRecord.session_id === "string"
+            ? payloadRecord.session_id.trim()
+            : "";
+      const assignedRoot =
+        sessionId.length === 0 ? undefined : codexMetadata?.projectRootsBySessionId.get(sessionId);
+      if (assignedRoot !== undefined) return assignedRoot;
     }
     const nested = (payload as Record<string, unknown>).cwd;
     if (typeof nested === "string" && nested.trim().length > 0) {
@@ -663,6 +710,43 @@ export const make = Effect.gen(function* () {
 
   const listDirectory = (directory: string) =>
     fileSystem.readDirectory(directory).pipe(Effect.orElseSucceed((): ReadonlyArray<string> => []));
+
+  const readCodexDesktopMetadata = Effect.fn("AgentSessionScanner.readCodexDesktopMetadata")(
+    function* (homePath: string): Effect.fn.Return<CodexDesktopMetadata> {
+      const titlesBySessionId = new Map<string, string>();
+      const sessionIndex = yield* fileSystem
+        .readFileString(path.join(homePath, "session_index.jsonl"))
+        .pipe(Effect.orElseSucceed(() => ""));
+      for (const line of sessionIndex.split("\n")) {
+        if (line.trim().length === 0) continue;
+        const decoded = decodeCodexSessionIndexEntry(line);
+        if (Option.isNone(decoded)) continue;
+        const id = decoded.value.id.trim();
+        const title = decoded.value.thread_name.trim();
+        if (id.length > 0 && title.length > 0) titlesBySessionId.set(id, title);
+      }
+
+      const projectRootsBySessionId = new Map<string, string>();
+      const globalStateText = yield* fileSystem
+        .readFileString(path.join(homePath, ".codex-global-state.json"))
+        .pipe(Effect.orElseSucceed(() => ""));
+      const decodedGlobalState = decodeCodexGlobalState(globalStateText);
+      if (Option.isSome(decodedGlobalState)) {
+        const assignments = decodedGlobalState.value["thread-project-assignments"] ?? {};
+        const projects = decodedGlobalState.value["local-projects"] ?? {};
+        for (const [sessionId, assignment] of Object.entries(assignments)) {
+          if (assignment.projectKind !== "local") continue;
+          const project = projects[assignment.projectId];
+          const projectRoot = project?.rootPaths.find((value) => value.trim().length > 0);
+          if (projectRoot !== undefined) {
+            projectRootsBySessionId.set(sessionId, projectRoot.trim());
+          }
+        }
+      }
+
+      return { projectRootsBySessionId, titlesBySessionId };
+    },
+  );
 
   const statOption = (target: string) =>
     fileSystem.stat(target).pipe(Effect.asSome, Effect.orElseSucceed(Option.none));
@@ -790,7 +874,9 @@ export const make = Effect.gen(function* () {
         };
         const readLastRecord = () => {
           const record = remaining + decoder.decode();
-          return record.length === 0 || !reserveRecord() ? null : extractCwd(record.trim(), source);
+          return record.length === 0 || !reserveRecord()
+            ? null
+            : extractCwd(record.trim(), source, transcript.codexMetadata);
         };
 
         for await (const chunk of transcriptChunks(file, METADATA_READ_BYTES)) {
@@ -814,7 +900,7 @@ export const make = Effect.gen(function* () {
 
           for (const line of lines) {
             if (!reserveRecord()) return null;
-            const cwd = extractCwd(line.trim(), source);
+            const cwd = extractCwd(line.trim(), source, transcript.codexMetadata);
             if (cwd !== null) return cwd;
           }
         }
@@ -974,7 +1060,7 @@ export const make = Effect.gen(function* () {
               const record = remaining + decoder.decode();
               return record.length === 0 || !reserveRecord()
                 ? null
-                : extractCwd(record.trim(), source);
+                : extractCwd(record.trim(), source, transcript.codexMetadata);
             };
 
             while (bytesRead < maxBytes) {
@@ -997,7 +1083,7 @@ export const make = Effect.gen(function* () {
               remaining = lines.pop() ?? "";
               for (const line of lines) {
                 if (!reserveRecord()) return null;
-                const cwd = extractCwd(line.trim(), source);
+                const cwd = extractCwd(line.trim(), source, transcript.codexMetadata);
                 if (cwd !== null) return cwd;
               }
             }
@@ -1163,6 +1249,7 @@ export const make = Effect.gen(function* () {
             mtimeMs: stats.value.mtime.value.getTime(),
             providerInstanceId,
             size: Number(stats.value.size),
+            codexMetadata: null,
           });
         }
       }
@@ -1171,7 +1258,12 @@ export const make = Effect.gen(function* () {
   );
 
   const discoverCodexTranscripts = Effect.fn("AgentSessionScanner.discoverCodexTranscripts")(
-    function* (homePath: string, providerInstanceId: ProviderInstanceId, operationBudget: number) {
+    function* (
+      homePath: string,
+      providerInstanceId: ProviderInstanceId,
+      operationBudget: number,
+      codexMetadata: CodexDesktopMetadata,
+    ) {
       const sessionsDir = path.join(homePath, "sessions");
       const archivedSessionsDir = path.join(homePath, "archived_sessions");
 
@@ -1225,6 +1317,7 @@ export const make = Effect.gen(function* () {
                   mtimeMs: stats.value.mtime.value.getTime(),
                   providerInstanceId,
                   size: Number(stats.value.size),
+                  codexMetadata,
                 });
               }
             }
@@ -1251,6 +1344,7 @@ export const make = Effect.gen(function* () {
             mtimeMs: stats.value.mtime.value.getTime(),
             providerInstanceId,
             size: Number(stats.value.size),
+            codexMetadata,
           });
         }
       }
@@ -1269,7 +1363,7 @@ export const make = Effect.gen(function* () {
         cwd: string;
         providerInstanceId: ProviderInstanceId;
         lastActiveAtMs: number;
-        transcripts: Array<{ filePath: string; mtimeMs: number }>;
+        transcripts: Array<TranscriptCandidate>;
       }
     >();
 
@@ -1383,7 +1477,12 @@ export const make = Effect.gen(function* () {
         }
         const discovered = yield* source === "claudeAgent"
           ? discoverClaudeTranscripts(home.homePath, home.providerInstanceId, operationBudget)
-          : discoverCodexTranscripts(home.homePath, home.providerInstanceId, operationBudget);
+          : discoverCodexTranscripts(
+              home.homePath,
+              home.providerInstanceId,
+              operationBudget,
+              yield* readCodexDesktopMetadata(home.homePath),
+            );
         truncated ||= discovered.truncated;
         transcriptCandidates.push(...discovered.transcripts);
       }
@@ -1617,6 +1716,10 @@ export const make = Effect.gen(function* () {
             return Option.some<AgentSessionRecentThread>({
               _tag: "AlreadyImported",
               source: completedSource,
+              title:
+                transcript.codexMetadata?.titlesBySessionId.get(
+                  completedSource.providerSessionId,
+                ) ?? null,
             });
           }
           const compressed = transcript.filePath.endsWith(".zst");
@@ -1643,14 +1746,6 @@ export const make = Effect.gen(function* () {
           if (compressed) bytesRemaining -= snapshot.bytesRead;
           recordsRemaining -= snapshot.recordCount;
 
-          if (Option.isNone(snapshot.cwd)) {
-            return Option.some<AgentSessionRecentThread>({ _tag: "Skipped" });
-          }
-          const expandedCwd = expandHomePath(snapshot.cwd.value.trim(), homeDir);
-          if (!path.isAbsolute(expandedCwd) || !(yield* matchesSelectedProject(expandedCwd))) {
-            return Option.some<AgentSessionRecentThread>({ _tag: "Skipped" });
-          }
-
           const parsedThread = parseAgentSessionRecords(
             {
               source: candidate.source,
@@ -1666,6 +1761,24 @@ export const make = Effect.gen(function* () {
           if (parsedThread === null) {
             return Option.some<AgentSessionRecentThread>({ _tag: "Skipped" });
           }
+          const assignedRoot = transcript.codexMetadata?.projectRootsBySessionId.get(
+            parsedThread.providerSessionId,
+          );
+          const effectiveCwd = assignedRoot ?? Option.getOrNull(snapshot.cwd);
+          if (effectiveCwd === null) {
+            return Option.some<AgentSessionRecentThread>({ _tag: "Skipped" });
+          }
+          const expandedCwd = expandHomePath(effectiveCwd.trim(), homeDir);
+          if (!path.isAbsolute(expandedCwd) || !(yield* matchesSelectedProject(expandedCwd))) {
+            return Option.some<AgentSessionRecentThread>({ _tag: "Skipped" });
+          }
+          const authoritativeTitle = transcript.codexMetadata?.titlesBySessionId.get(
+            parsedThread.providerSessionId,
+          );
+          const thread =
+            authoritativeTitle === undefined
+              ? parsedThread
+              : { ...parsedThread, title: authoritativeTitle };
 
           const source: AgentSessionImportSource = {
             ...identity,
@@ -1680,7 +1793,7 @@ export const make = Effect.gen(function* () {
           importedSessions.add(sessionKey);
           return Option.some<AgentSessionRecentThread>({
             _tag: "Importable",
-            thread: parsedThread,
+            thread,
             source,
           });
         }).pipe(importReadLock.withPermits(1)),

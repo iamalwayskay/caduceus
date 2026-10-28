@@ -11,14 +11,17 @@ re-enable those paths.
 
 ## Provider model
 
-T3 remains the control plane. Hermes and DeepSeek Harness are separate ACP providers rather than
+T3 remains the control plane. Hermes and DeepSeek Harness stay separate rather than having their
 code folded into the fork. Ordinary Git-backed project files are the shared memory authority;
-Hermes curates and learns from those files. No custom memory MCP exists or is needed.
+Hermes supplies its own durable learning in `~/.hermes/memories/MEMORY.md`. Automatic post-thread
+curation of project files is not implemented, and no custom memory MCP is needed merely to share
+files between agents.
 
 ## Current status
 
-- Commit `b32b01407c` is deployed on the laptop and Haven. The Linux x64 archive SHA-256 is
-  `7f5e2152c39fb653563787156deafa83bee27ad288dd96fd4e8a9ca6442ca15a`.
+- Haven still runs the earlier verified private CLI deployment. The laptop desktop artifact is
+  rebuilt separately from the final `telemetry-free` commit; its commit and hashes are recorded in
+  the installed release directory's `MANIFEST` after installation.
 - KPC has the native Caduceus AppImage installed inside the fork at
   `/home/kay/Code/AI/apps/caduceus/release/Caduceus-0.1.3-x86_64.AppImage`, with its application-menu
   entry at `~/.local/share/applications/caduceus.desktop`. It uses
@@ -29,12 +32,12 @@ Hermes curates and learns from those files. No custom memory MCP exists or is ne
   processes from owning the same state directory. The CLI launcher remains
   `/home/kay/.local/bin/caduceus`. The installed
   AppImage SHA-256 is `548c34827ed9deb55e36864308c47df4dd61154ae653efa2bf8d47ea5f198073`.
-- Codex and DeepSeek Harness ACP are enabled. Hermes remains installed for its recursive-learning
-  application, but its duplicate provider instances are hidden from the model picker. DSH's
+- Codex, Claude, and DeepSeek Harness ACP are enabled. Hermes remains installed as the separate
+  recursive-learning application, but it is not duplicated in the model picker. DSH's
   112-model catalog appears as three provider groups: local Qwen 3.8 and Decider 2B, 74 Venice
   models, and 36 OpenCode Go models. DSH defaults to local Qwen 3.8. Venice is injected only into
   the DSH child by Thalamus; OpenCode Go uses DSH's protected credential reference. Claude is
-  installed but not authenticated.
+  installed at `/home/kay/.local/bin/claude`; authentication remains owned by Claude Code.
 - Haven runs `caduceus.service` as locked account `svc-caduceus`, binds only
   `127.0.0.1:3773`, and can write only `/srv/caduceus/data`. Its unit permits `AF_NETLINK` because
   Node's `os.networkInterfaces()` needs it for direct-environment configuration.
@@ -65,9 +68,10 @@ Hermes curates and learns from those files. No custom memory MCP exists or is ne
   local MCP session, including sessions older than 30 days and Codex's `.jsonl.zst` archives. An
   explicitly registered home project may import `/home/kay` sessions, while automatic discovery
   still excludes the home directory.
-- Projectless now lists 119 ordinary conversations. Archived threads and review subagents remain
-  outside that sidebar count. The completed source ledger includes 38 compressed Codex archive
-  files; malformed or over-limit transcripts are skipped without aborting the import.
+- Projectless imports ordinary conversations while archived threads and review subagents remain
+  outside that sidebar count. The importer reads Codex's authoritative desktop titles and project
+  assignments, excludes agent-created child threads, and refreshes stale imported titles without
+  replaying messages. Malformed or over-limit transcripts are skipped without aborting the import.
 - The release smoke test, runtime endpoint scan, missing-`connect` CLI check, both loopback listener
   checks, HTTP health, service restart, restricted-key denial, and legacy Connect-state scan passed.
   Retired Connect keys and cloudflared binaries are preserved under
@@ -92,3 +96,17 @@ Caduceus builds; a signed Caduceus mobile build remains a separate deliverable.
   the encoded model provider, so local, Venice, and OpenCode models no longer appear as repeated
   generic subscription rows. Hermes remains installed but its duplicate picker instances are
   disabled.
+
+## 2026-10-28 — corrective desktop release
+
+- GUI provider discovery now adds `~/.local/bin` and `~/bin`; Claude no longer fails with
+  `spawn claude ENOENT` when launched from the desktop menu.
+- Generated `t3code://` handlers retain only the required `T3CODE_HOME` and LAN-host environment,
+  so a link cannot reopen an unrelated onboarding state under `~/.t3`.
+- On Linux, closing the final window leaves the local backend running for paired phone and LAN
+  clients. Launching Caduceus again recreates the main window; explicit Quit still stops it.
+- Hermes's three empty ACP sessions with invalid blank-model policies were removed after a state
+  snapshot. A live one-shot turn created and read back its built-in `MEMORY.md` successfully.
+- The accidental raw-launch state under `~/.t3` was moved to the desktop Trash. The previous
+  desktop artifact, CLI, and generated URL-handler entry are preserved in
+  `/home/kay/Archive/caduceus-release-provenance-2026-10/`.

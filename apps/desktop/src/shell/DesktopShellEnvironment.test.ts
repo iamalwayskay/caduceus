@@ -118,6 +118,24 @@ function runShellEnvironment(input: {
 }
 
 describe("DesktopShellEnvironment", () => {
+  it.effect("adds Unix user CLI directories when GUI and login-shell PATH omit them", () =>
+    Effect.gen(function* () {
+      const env: NodeJS.ProcessEnv = {
+        HOME: "/home/test",
+        SHELL: "/bin/bash",
+        PATH: "/usr/bin:/bin",
+      };
+
+      yield* runShellEnvironment({
+        env,
+        platform: "linux",
+        handler: () => envOutput({ PATH: "/usr/local/bin:/usr/bin" }),
+      });
+
+      assert.equal(env.PATH, "/usr/local/bin:/usr/bin:/home/test/.local/bin:/home/test/bin:/bin");
+    }),
+  );
+
   it.effect("rejects PATH output from a failed shell and tries the next candidate", () =>
     Effect.gen(function* () {
       const env: NodeJS.ProcessEnv = { SHELL: "/bin/failing", PATH: "/usr/bin" };

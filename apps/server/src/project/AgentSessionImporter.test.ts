@@ -162,8 +162,12 @@ const seedOwner = Effect.fn(function* (
 });
 
 const makeImporter = Effect.fn(function* (
-  candidates: ReadonlyArray<ReturnType<typeof candidate>>,
+  candidates: ReadonlyArray<AgentSessionScanner.AgentSessionRecentThread>,
   beforeTransaction: Effect.Effect<void> = Effect.void,
+  targetProject: { readonly id: ProjectId; readonly workspaceRoot: string } = {
+    id: projectId,
+    workspaceRoot: "/workspace/project",
+  },
 ) {
   const sql = yield* SqlClient.SqlClient;
   const events = yield* EventStore.EventStoreV2;
@@ -210,9 +214,9 @@ const makeImporter = Effect.fn(function* (
           Layer.mock(ProjectService.ProjectService)({
             getById: () =>
               Effect.succeedSome({
-                id: projectId,
+                id: targetProject.id,
                 title: "Project",
-                workspaceRoot: "/workspace/project",
+                workspaceRoot: targetProject.workspaceRoot,
                 defaultModelSelection: null,
                 scripts: [],
                 createdAt: timestamp,
@@ -235,7 +239,7 @@ const makeImporter = Effect.fn(function* (
     ),
   );
   const importer = Context.get(context, AgentSessionImporter.AgentSessionImporter);
-  return { run: importer.importRecentAgentThreads({ projectId }), published };
+  return { run: importer.importRecentAgentThreads({ projectId: targetProject.id }), published };
 });
 
 it.effect(
@@ -309,6 +313,195 @@ it.effect(
         });
       }
     }).pipe(Effect.scoped, Effect.provide(persistence)),
+);
+
+it.effect("refreshes an imported thread title without replaying its messages", () =>
+  Effect.gen(function* () {
+    const projections = yield* ProjectionStore.ProjectionStoreV2;
+    const events = yield* EventStore.EventStoreV2;
+    const stale = candidate(CODEX_MODEL_SELECTION, "refresh-title");
+    const fresh = {
+      ...stale,
+      source: {
+        ...stale.source,
+        filePath: "/tmp/codex/refresh-title-new.jsonl",
+        mtimeMs: 3,
+      },
+      thread: { ...stale.thread, title: "Canonical Codex title" },
+    } satisfies ReturnType<typeof candidate>;
+    const threadId = importId(stale);
+
+    const initial = yield* makeImporter([stale]);
+    expect(yield* initial.run).toEqual({ importedCount: 1, skippedCount: 0 });
+    expect((yield* projections.getThreadRecords(threadId, ["messages"])).thread.title).toBe(
+      "Imported thread",
+    );
+
+    const refresh = yield* makeImporter([fresh]);
+    expect(yield* refresh.run).toEqual({ importedCount: 1, skippedCount: 0 });
+    const records = yield* projections.getThreadRecords(threadId, ["messages"]);
+    expect(records.thread.title).toBe("Canonical Codex title");
+    expect(records.messages.map((message) => message.text)).toEqual(["Fix it", "Fixed"]);
+    expect(
+      (yield* events.read({ threadId }).pipe(Stream.runCollect)).filter(
+        (stored) => stored.event.type === "message.updated",
+      ),
+    ).toHaveLength(2);
+    expect(
+      refresh.published.map((stored) => ("event" in stored ? stored.event.type : stored.type)),
+    ).toEqual(["thread.metadata-updated"]);
+  }).pipe(Effect.scoped, Effect.provide(persistence)),
+);
+
+it.effect("refreshes an unchanged completed Codex thread from authoritative metadata", () =>
+  Effect.gen(function* () {
+    const projections = yield* ProjectionStore.ProjectionStoreV2;
+    const events = yield* EventStore.EventStoreV2;
+    const source = candidate(CODEX_MODEL_SELECTION, "metadata-title-refresh");
+    const threadId = importId(source);
+
+    const initial = yield* makeImporter([source]);
+    expect(yield* initial.run).toEqual({ importedCount: 1, skippedCount: 0 });
+
+    const refresh = yield* makeImporter([
+      {
+        _tag: "AlreadyImported",
+        source: source.source,
+        title: "Canonical Codex title",
+      },
+    ]);
+    expect(yield* refresh.run).toEqual({ importedCount: 1, skippedCount: 0 });
+
+    const records = yield* projections.getThreadRecords(threadId, ["messages"]);
+    expect(records.thread.title).toBe("Canonical Codex title");
+    expect(records.messages.map((message) => message.text)).toEqual(["Fix it", "Fixed"]);
+    expect(
+      (yield* events.read({ threadId }).pipe(Stream.runCollect)).filter(
+        (stored) => stored.event.type === "message.updated",
+      ),
+    ).toHaveLength(2);
+    expect(
+      refresh.published.map((stored) => ("event" in stored ? stored.event.type : stored.type)),
+    ).toEqual(["thread.metadata-updated"]);
+  }).pipe(Effect.scoped, Effect.provide(persistence)),
+);
+
+it.effect("preserves a manual title on an unchanged imported Codex thread", () =>
+  Effect.gen(function* () {
+    const projections = yield* ProjectionStore.ProjectionStoreV2;
+    const sink = yield* EventSink.EventSinkV2;
+    const source = candidate(CODEX_MODEL_SELECTION, "manual-title");
+    const threadId = importId(source);
+    const initial = yield* makeImporter([source]);
+    expect(yield* initial.run).toEqual({ importedCount: 1, skippedCount: 0 });
+    const imported = yield* projections.getThread(threadId);
+    yield* sink.write({
+      events: [
+        {
+          id: EventId.make("manual-title:update"),
+          type: "thread.metadata-updated",
+          threadId,
+          providerInstanceId: source.source.providerInstanceId,
+          occurredAt: now,
+          payload: { ...imported, title: "My title", updatedAt: now },
+        },
+      ],
+    });
+
+    const refresh = yield* makeImporter([
+      {
+        _tag: "AlreadyImported",
+        source: source.source,
+        title: "Canonical Codex title",
+      },
+    ]);
+    expect(yield* refresh.run).toEqual({ importedCount: 1, skippedCount: 0 });
+    expect((yield* projections.getThread(threadId)).title).toBe("My title");
+    expect(refresh.published).toEqual([]);
+  }).pipe(Effect.scoped, Effect.provide(persistence)),
+);
+
+it.effect("migrates an importer-owned thread and runtime to its authoritative project", () =>
+  Effect.gen(function* () {
+    const projections = yield* ProjectionStore.ProjectionStoreV2;
+    const runtimes = yield* ProviderSessionRuntime.ProviderSessionRuntimeRepository;
+    const source = candidate(CODEX_MODEL_SELECTION, "project-migration");
+    const threadId = importId(source);
+    const initial = yield* makeImporter([source]);
+    expect(yield* initial.run).toEqual({ importedCount: 1, skippedCount: 0 });
+
+    const assignedProject = {
+      id: ProjectId.make("authoritative-project"),
+      workspaceRoot: "/workspace/authoritative",
+    };
+    const migrated = yield* makeImporter([source], Effect.void, assignedProject);
+    expect(yield* migrated.run).toEqual({ importedCount: 1, skippedCount: 0 });
+
+    expect((yield* projections.getThread(threadId)).projectId).toBe(assignedProject.id);
+    expect(
+      Option.getOrThrow(yield* runtimes.getByThreadId({ threadId })).runtimePayload,
+    ).toMatchObject({ cwd: assignedProject.workspaceRoot });
+  }).pipe(Effect.scoped, Effect.provide(persistence)),
+);
+
+it.effect("does not migrate a manually modified imported thread", () =>
+  Effect.gen(function* () {
+    const projections = yield* ProjectionStore.ProjectionStoreV2;
+    const sink = yield* EventSink.EventSinkV2;
+    const runtimes = yield* ProviderSessionRuntime.ProviderSessionRuntimeRepository;
+    const source = candidate(CODEX_MODEL_SELECTION, "manual-project-migration");
+    const threadId = importId(source);
+    const initial = yield* makeImporter([source]);
+    expect(yield* initial.run).toEqual({ importedCount: 1, skippedCount: 0 });
+    const imported = yield* projections.getThread(threadId);
+    yield* sink.write({
+      events: [
+        {
+          id: EventId.make("manual-project-migration:update"),
+          type: "thread.metadata-updated",
+          threadId,
+          providerInstanceId: source.source.providerInstanceId,
+          occurredAt: now,
+          payload: { ...imported, title: "Manual title", updatedAt: now },
+        },
+      ],
+    });
+
+    const attempted = yield* makeImporter([source], Effect.void, {
+      id: ProjectId.make("blocked-authoritative-project"),
+      workspaceRoot: "/workspace/blocked-authoritative",
+    });
+    expect(yield* attempted.run).toEqual({ importedCount: 0, skippedCount: 1 });
+    expect((yield* projections.getThread(threadId)).projectId).toBe(projectId);
+    expect(
+      Option.getOrThrow(yield* runtimes.getByThreadId({ threadId })).runtimePayload,
+    ).toMatchObject({ cwd: "/workspace/project" });
+  }).pipe(Effect.scoped, Effect.provide(persistence)),
+);
+
+it.effect("applies successive authoritative titles for one unchanged transcript", () =>
+  Effect.gen(function* () {
+    const projections = yield* ProjectionStore.ProjectionStoreV2;
+    const events = yield* EventStore.EventStoreV2;
+    const source = candidate(CODEX_MODEL_SELECTION, "successive-titles");
+    const threadId = importId(source);
+    const initial = yield* makeImporter([source]);
+    expect(yield* initial.run).toEqual({ importedCount: 1, skippedCount: 0 });
+
+    for (const title of ["First canonical title", "Second canonical title"]) {
+      const refresh = yield* makeImporter([
+        { _tag: "AlreadyImported", source: source.source, title },
+      ]);
+      expect(yield* refresh.run).toEqual({ importedCount: 1, skippedCount: 0 });
+    }
+
+    expect((yield* projections.getThread(threadId)).title).toBe("Second canonical title");
+    expect(
+      (yield* events.read({ threadId }).pipe(Stream.runCollect)).filter(
+        (stored) => stored.event.type === "thread.metadata-updated",
+      ),
+    ).toHaveLength(2);
+  }).pipe(Effect.scoped, Effect.provide(persistence)),
 );
 
 it.effect("rechecks ownership after the import reaches the commit transaction", () =>
