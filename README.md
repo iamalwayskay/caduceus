@@ -63,8 +63,9 @@ Harness, projects, and saved Haven environment as the CLI deployment. It adverti
 `192.168.1.185:3773` for authenticated clients on the home LAN; WireGuard clients can use
 `10.77.0.2:3773`. The application and its data stay inside the AI homestead; the launcher opens the
 primary Caduceus repository on `main`, not this fork's build worktree and not the non-Git AI
-container directory. Provider choices include Hermes/OpenAI, three fixed local Ollama routes, and
-DSH's shared 112-model catalog: local Qwen/Decider, 74 Venice models, and 36 OpenCode Go models.
+container directory. The model picker exposes five provider groups: Codex, Claude, DSH local
+models, Venice, and OpenCode Go. The final three use DSH's shared 112-model catalog, split into
+local Qwen/Decider, 74 Venice models, and 36 OpenCode Go models.
 
 ### Upstream desktop packages
 

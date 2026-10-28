@@ -63,6 +63,7 @@ import {
   type ProviderInstanceEntry,
 } from "../../providerInstances";
 import { providerModelKey, sortProviderModelItems } from "../../modelOrdering";
+import { caduceusProviderOrder, modelBelongsToDshProviderGroup } from "./dshProviderGroups";
 
 type ModelPickerItem = {
   slug: string;
@@ -104,6 +105,7 @@ function shouldIncludeModelPickerOption(input: {
   readonly activeInstanceId: ProviderInstanceId;
   readonly activeModel: string;
 }): boolean {
+  if (!modelBelongsToDshProviderGroup(input.entry.instanceId, input.option.slug)) return false;
   if (input.entry.driverKind === "antigravity" && input.option.slug === ANTIGRAVITY_DEFAULT_MODEL) {
     return false;
   }
@@ -615,7 +617,12 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
     return disabled;
   })();
   const sidebarInstanceEntries = (() => {
-    const enabledEntries = instanceEntries.filter(isProviderInstancePickerVisible);
+    const enabledEntries = instanceEntries
+      .filter(isProviderInstancePickerVisible)
+      .toSorted(
+        (left, right) =>
+          caduceusProviderOrder(left.instanceId) - caduceusProviderOrder(right.instanceId),
+      );
     if (!isLocked) {
       return enabledEntries;
     }

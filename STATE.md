@@ -28,15 +28,13 @@ Hermes curates and learns from those files. No custom memory MCP exists or is ne
   non-loopback access to the home LAN and WireGuard. The former standalone user service is disabled to prevent two
   processes from owning the same state directory. The CLI launcher remains
   `/home/kay/.local/bin/caduceus`. The installed
-  AppImage SHA-256 is `47b7fc308753ff3a354d13763d596de445e7f049d8eb002b365d243f04de10ad`.
-- Codex, Hermes ACP, and DeepSeek Harness ACP are enabled. Generic Hermes keeps its imported OpenAI
-  Codex session and frontier model picker. Three safe-mode Hermes instances pin every installed
-  local Ollama model: `qwen3.8:latest`, `qwen3:4b-instruct-2507-q4_K_M`, and
-  `decider-2b:latest`; the Ollama `qwen3.5:cloud` pointer is correctly not labelled local. DSH ACP
-  exposes one universal 112-model picker: local Qwen 3.8 and Decider 2B, 74 Venice models, and 36
-  OpenCode Go models. DSH defaults to local Qwen 3.8. Venice is injected only into the DSH child by
-  Thalamus; OpenCode Go uses DSH's protected credential reference. Claude is installed but not
-  authenticated.
+  AppImage SHA-256 is `e77c226761da5591ffc68c7860c77d41a7221eb8aa21ca909bdb770fe01748b5`.
+- Codex and DeepSeek Harness ACP are enabled. Hermes remains installed for its recursive-learning
+  application, but its duplicate provider instances are hidden from the model picker. DSH's
+  112-model catalog appears as three provider groups: local Qwen 3.8 and Decider 2B, 74 Venice
+  models, and 36 OpenCode Go models. DSH defaults to local Qwen 3.8. Venice is injected only into
+  the DSH child by Thalamus; OpenCode Go uses DSH's protected credential reference. Claude is
+  installed but not authenticated.
 - Haven runs `caduceus.service` as locked account `svc-caduceus`, binds only
   `127.0.0.1:3773`, and can write only `/srv/caduceus/data`. Its unit permits `AF_NETLINK` because
   Node's `os.networkInterfaces()` needs it for direct-environment configuration.
@@ -82,3 +80,11 @@ Hermes curates and learns from those files. No custom memory MCP exists or is ne
 The upstream App Store and Play Store clients are not Caduceus builds and are not covered by this
 fork's telemetry-free guarantee. The installed KPC desktop package and local web/server client are
 Caduceus builds; a signed Caduceus mobile build remains a separate deliverable.
+
+## 2026-10-28 — provider picker groups
+
+- The desktop model picker now exposes exactly Codex, Claude, DSH: Local models, Venice, and
+  OpenCode Go. DSH's single 112-model ACP catalog is registered as three instances and filtered by
+  the encoded model provider, so local, Venice, and OpenCode models no longer appear as repeated
+  generic subscription rows. Hermes remains installed but its duplicate picker instances are
+  disabled.
