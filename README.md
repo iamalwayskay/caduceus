@@ -59,7 +59,9 @@ install -Dm644 apps/desktop/resources/linux/caduceus-kpc.desktop \
 The installed application is **Caduceus** at
 `/home/kay/Code/AI/apps/caduceus/release/Caduceus-0.1.3-x86_64.AppImage`. KPC's desktop entry sets
 `T3CODE_HOME=/home/kay/Code/AI/data/caduceus`, so the app uses the same Codex, Hermes, DeepSeek
-Harness, projects, and saved Haven environment as the CLI deployment.
+Harness, projects, and saved Haven environment as the CLI deployment. It advertises KPC at
+`192.168.1.185:3773` for authenticated clients on the home LAN; WireGuard clients can use
+`10.77.0.2:3773`.
 
 ### Upstream desktop packages
 

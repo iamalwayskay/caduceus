@@ -28,13 +28,19 @@ Hermes curates and learns from those files. No custom memory MCP exists or is ne
   AppImage SHA-256 is `934cf79411041715771f6b7ef404cdc519d976e30b48edb82f46823f7b57e573`.
 - Codex, Hermes ACP, and DeepSeek Harness ACP are enabled. Hermes uses its own imported OpenAI Codex
   session with `gpt-6.1-sol`; DeepSeek Harness reports `deepseek-v4-flash`. Claude is installed but
-  not authenticated.
+  not authenticated. A separate `Hermes Local · Qwen3.8` ACP instance uses KPC's Ollama service at
+  `127.0.0.1:11434`, preserving frontier Hermes as a separate choice.
 - Haven runs `caduceus.service` as locked account `svc-caduceus`, binds only
   `127.0.0.1:3773`, and can write only `/srv/caduceus/data`. Its unit permits `AF_NETLINK` because
   Node's `os.networkInterfaces()` needs it for direct-environment configuration.
 - The laptop exposes Haven only at `127.0.0.1:3774` through the existing WireGuard route and a
   restricted, forwarding-only SSH key. Caduceus saves Haven as a direct environment; no T3 account
   or hosted infrastructure participates. Forced tunnel outage and automatic recovery passed.
+- KPC's desktop backend accepts authenticated clients at `192.168.1.185:3773` on the home LAN and
+  `10.77.0.2:3773` over WireGuard. UFW limits port 3773 to the home subnet and `wg0`; phone pairing
+  uses one-time local tokens and no hosted relay.
+- The `upstream` remote fetches only `upstream/main`; 2,148 unrelated upstream branch refs were
+  removed so the app's branch picker no longer resembles a list of extra checkouts.
 - The release smoke test, runtime endpoint scan, missing-`connect` CLI check, both loopback listener
   checks, HTTP health, service restart, restricted-key denial, and legacy Connect-state scan passed.
   Retired Connect keys and cloudflared binaries are preserved under
